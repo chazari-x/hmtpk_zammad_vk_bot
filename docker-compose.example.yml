@@ -1,0 +1,30 @@
+version: '3'
+services:
+  zammda-bot:
+    container_name: zammad-bot
+    image: chazari/zammad-vk-bot:latest
+    environment:
+      VK_TOKEN: token
+      VK_API_HREF: https://api.vk.com
+      ZAMMAD_TOKEN: token
+      ZAMMAD_HREF: href
+      WEBHOOK_SECRET_KEY: secret
+      WEBHOOK_PORT: :8181
+      POSTGRES_DB_SECRET_KEY: secret
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_HOST: postgres # postgres container_name
+      POSTGRES_PASSWORD: password
+    restart: always
+    command: ["/app/main", "vk-bot"]
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    restart: on-failure
+    ports:
+      - "5432:5432"
