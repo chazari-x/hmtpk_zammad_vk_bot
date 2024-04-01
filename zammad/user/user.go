@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/AlessandroSechi/zammad-go"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/client"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/model"
+	"github.com/chazari-x/zammad-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,7 +35,7 @@ func (u *User) Me(user, pass string) (User model.User, err error) {
 		return
 	}
 
-	bytes, err := json.Marshal(*data)
+	bytes, err := json.Marshal(data)
 	if err != nil {
 		log.Error(err)
 		return
@@ -55,7 +55,7 @@ func (u *User) ListByDepartment(department string, group int) (Users []model.Use
 		return
 	}
 
-	bytes, err := json.Marshal(*data)
+	bytes, err := json.Marshal(data)
 	if err != nil {
 		log.Error(err)
 		return
@@ -88,7 +88,7 @@ func (u *User) ValidateEmail(emails string) (err error) {
 		return
 	}
 
-	bytes, err := json.Marshal(*data)
+	bytes, err := json.Marshal(data)
 	if err != nil {
 		log.Error(err)
 		return
@@ -116,7 +116,7 @@ func (u *User) Departments(group int) (departments []string, err error) {
 		return
 	}
 
-	bytes, err := json.Marshal(*data)
+	bytes, err := json.Marshal(data)
 	if err != nil {
 		log.Error(err)
 		return

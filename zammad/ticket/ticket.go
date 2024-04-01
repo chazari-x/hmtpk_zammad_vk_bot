@@ -3,8 +3,8 @@ package ticket
 import (
 	"encoding/json"
 
-	"github.com/AlessandroSechi/zammad-go"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/model"
+	"github.com/chazari-x/zammad-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,17 +16,26 @@ func NewTicketController(client *zammad.Client) *Ticket {
 	return &Ticket{client: client}
 }
 
-//func (t *Ticket) Search(query string, limit int) (list *[]map[string]interface{}, err error) {
-//	list, err = t.client.TicketSearch(query, limit)
-//	if err != nil {
-//		log.Error(err)
-//		return
-//	}
-//
-//	log.Trace(list)
-//
-//	return
-//}
+func (t *Ticket) TicketsByCustomer(customer int) (TicketsByCustomer model.TicketsByCustomer, err error) {
+	list, err := t.client.TicketListByCustomer(customer)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	listBytes, err := json.Marshal(*list)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if err = json.Unmarshal(listBytes, &TicketsByCustomer); err != nil {
+		log.Error(err)
+		return
+	}
+
+	return
+}
 
 func (t *Ticket) PriorityList() (Priorities []model.Priority, err error) {
 	list, err := t.client.TicketPriorityList()
@@ -35,7 +44,7 @@ func (t *Ticket) PriorityList() (Priorities []model.Priority, err error) {
 		return
 	}
 
-	listBytes, err := json.Marshal(*list)
+	listBytes, err := json.Marshal(list)
 	if err != nil {
 		log.Error(err)
 		return
@@ -62,7 +71,7 @@ func (t *Ticket) Create(ticket model.Ticket) (TicketCreate model.TicketCreate, e
 		return
 	}
 
-	listBytes, err := json.Marshal(*list)
+	listBytes, err := json.Marshal(list)
 	if err != nil {
 		log.Error(err)
 		return
@@ -95,7 +104,7 @@ func (t *Ticket) SendToTicket(ticket model.Ticket) (Article model.TicketArticle,
 		return
 	}
 
-	listBytes, err := json.Marshal(*list)
+	listBytes, err := json.Marshal(list)
 	if err != nil {
 		log.Error(err)
 		return

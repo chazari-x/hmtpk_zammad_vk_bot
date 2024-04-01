@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/AlessandroSechi/zammad-go"
+	"github.com/chazari-x/zammad-go"
 	log "github.com/sirupsen/logrus"
 )
 

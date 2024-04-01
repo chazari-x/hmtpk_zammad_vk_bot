@@ -44,6 +44,7 @@ var (
 		model.CreateTicket.Key(),
 		model.ChangeOwner.Key(),
 		model.ChangeDepartment.Key(),
+		model.MyTickets.Key(),
 		model.Password.Key(),
 		model.Authorization.Key(),
 		model.SendMessage.Key(),
@@ -74,8 +75,9 @@ type Data struct {
 }
 
 func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
-	var data Data
-	data.msg = msg
+	var data = Data{
+		msg: msg,
+	}
 
 	if data.get, err = o.store.Get(msg.PeerID, model.Status); err != nil && !errors.Is(err, r.Nil) {
 		return
@@ -90,20 +92,15 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 		data.ticket = zammadModel.Ticket{}
 	}
 
-	if data.ticket.Customer != "" {
-		if data.customer, err = strconv.Atoi(data.ticket.Customer); err != nil {
-			return
-		}
-	} else {
-		data.ticket.Customer = strconv.Itoa(data.customer)
+	customer := data.ticket.Customer
+
+	if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return
 	}
+	data.ticket.Customer = strconv.Itoa(data.customer)
 
-	if data.customer <= 0 {
-		if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return
-		}
-
-		data.ticket.Customer = strconv.Itoa(data.customer)
+	if customer != data.ticket.Customer || data.ticket.Customer == "0" || data.ticket.Customer == "" {
+		data.ticket = zammadModel.Ticket{}
 	}
 
 	if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeGroup.Key()+"-") {
@@ -112,6 +109,8 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 		data.prefix = model.ChangeType.Key()
 	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeOwner.Key()+"-") {
 		data.prefix = model.ChangeOwner.Key()
+	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.MyTickets.Key()+"-") {
+		data.prefix = model.MyTickets.Key()
 	}
 
 	if data.prefix != "" {
@@ -152,7 +151,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 					return
 				}
 			case model.SendMessage.Key():
-				return o.sendMessage(&data)
+				if err = o.sendMessage(&data); err != nil {
+					return
+				}
 			case model.Password.Key():
 				if err = o.password(&data); err != nil {
 					return
@@ -174,6 +175,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 					data.value = data.command.Key()
 				case model.ChangeDepartment.Key():
 					data.command = model.ChangeDepartment
+					data.value = data.command.Key()
+				case model.MyTickets.Key():
+					data.command = model.MyTickets
 					data.value = data.command.Key()
 				default:
 					data.command = isAuthorization(data.customer)
@@ -219,6 +223,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 				data.command = model.ChangeOwner
 				data.value = data.command.Key()
 				data.ticket.Department = msg.ButtonPayload.Button.Value
+			case model.MyTickets.Key():
+				data.command = model.Home
+				data.value = data.command.Key()
 			default:
 				data.command = isAuthorization(data.customer)
 			}
@@ -253,7 +260,7 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 			data.messageTextTop = "♻ Вы удалили своё обращение.\n\n"
 		case model.Send.Key():
 			if _, err = o.zammad.Ticket.Create(data.ticket); err != nil {
-				return
+				return err
 			}
 			data.ticket = zammadModel.Ticket{}
 			data.command = model.Home
@@ -272,6 +279,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 			if data.marshal, err = json.Marshal(data.ticket); err != nil {
 				return
 			}
+		case model.MyTickets.Key():
+			data.command = model.MyTickets
+			data.value = data.command.Key()
 		case "":
 			switch msg.Text {
 			case model.Authorization.Key():
@@ -316,13 +326,16 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 		return
 	}
 
-	if data.kbrd, err = o.kbrd.GetKeyboard(data.command, keyboard.Data{
-		Page:       data.page,
-		Department: data.ticket.Department,
-		Group:      data.ticket.Group.ID,
-	}); err != nil {
-		log.Error(err)
-		return
+	if data.command.Message() != model.SendMessage.Message() {
+		if data.kbrd, err = o.kbrd.GetKeyboard(data.command, keyboard.Data{
+			Page:       data.page,
+			Department: data.ticket.Department,
+			Group:      data.ticket.Group.ID,
+			Customer:   data.customer,
+		}); err != nil {
+			log.Error(err)
+			return
+		}
 	}
 
 	if data.marshal == nil {
@@ -400,8 +413,7 @@ func (o *Operation) sendMessage(data *Data) (err error) {
 		return
 	}
 
-	messageText := "Вы отправили сообщение"
-
+	data.messageText = "Вы отправили сообщение"
 	data.ticket.Article.Body = data.msg.Text
 
 	_, err = o.zammad.Ticket.SendToTicket(data.ticket)
@@ -409,22 +421,34 @@ func (o *Operation) sendMessage(data *Data) (err error) {
 		return
 	}
 
-	kbrd, err := o.kbrd.GetKeyboard(model.Home, keyboard.Data{})
-	if err != nil {
-		return
-	}
+	data.command = model.Home
 
-	var b = params.NewMessagesSendBuilder()
-	b.Keyboard(string(kbrd))
-	b.Message(messageText)
-	b.RandomID(int(time.Now().Unix()))
-	b.PeerID(data.msg.PeerID)
-	b.TestMode(true)
-	_, err = o.vk.MessagesSend(b.Params)
+	//kbrd, err := o.kbrd.GetKeyboard(model.Home, keyboard.Data{})
+	//if err != nil {
+	//	return
+	//}
+	//
+	//var b = params.NewMessagesSendBuilder()
+	//b.Keyboard(string(kbrd))
+	//b.Message(messageText)
+	//b.RandomID(int(time.Now().Unix()))
+	//b.PeerID(data.msg.PeerID)
+	//b.TestMode(true)
+	//_, err = o.vk.MessagesSend(b.Params)
 	return
 }
 
 func (o *Operation) authorization(data *Data) (err error) {
+	var b = params.NewMessagesDeleteBuilder()
+	b.MessageIDs([]int{data.msg.ID})
+	b.PeerID(data.msg.PeerID)
+	b.TestMode(true)
+	_, err = o.vk.MessagesDelete(b.Params)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
 	data.command = model.Password
 	data.value = data.command.Key()
 	err = o.store.Set(data.msg.PeerID, model.User, data.msg.Text)
@@ -432,6 +456,16 @@ func (o *Operation) authorization(data *Data) (err error) {
 }
 
 func (o *Operation) password(data *Data) (err error) {
+	var b = params.NewMessagesDeleteBuilder()
+	b.MessageIDs([]int{data.msg.ID})
+	b.PeerID(data.msg.PeerID)
+	b.TestMode(true)
+	_, err = o.vk.MessagesDelete(b.Params)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
 	var get string
 	if get, err = o.store.Get(data.msg.PeerID, model.User); err != nil && !errors.Is(err, r.Nil) {
 		return

@@ -3,8 +3,8 @@ package object
 import (
 	"encoding/json"
 
-	"github.com/AlessandroSechi/zammad-go"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/model"
+	"github.com/chazari-x/zammad-go"
 	log "github.com/sirupsen/logrus"
 )
 

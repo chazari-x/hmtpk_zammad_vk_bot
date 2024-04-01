@@ -29,7 +29,7 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 		return
 	}
 
-	kbrd := keyboard.NewKeyboardGetter(vk, z)
+	kbrd := keyboard.NewKeyboardGetter(vk, z, s, db)
 	errCh := make(chan error)
 
 	go func() {

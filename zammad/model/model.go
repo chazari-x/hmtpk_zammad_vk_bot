@@ -251,3 +251,23 @@ var (
 	GroupIsNil    = errors.New("group is nil")
 	CustomerIsNil = errors.New("customer is nil")
 )
+
+type TicketsByCustomer struct {
+	TicketIdsOpen   []int `json:"ticket_ids_open"`
+	TicketIdsClosed []int `json:"ticket_ids_closed"`
+	Assets          struct {
+		Ticket map[string]TicketByCustomer `json:"Ticket"`
+	} `json:"assets"`
+}
+
+type TicketByCustomer struct {
+	ID         int    `json:"id"`
+	GroupID    int    `json:"group_id"`
+	PriorityID int    `json:"priority_id"`
+	StateID    int    `json:"state_id"`
+	Number     string `json:"number"`
+	Title      string `json:"title"`
+	OwnerID    int    `json:"owner_id"`
+	CustomerID int    `json:"customer_id"`
+	Type       any    `json:"type"`
+}

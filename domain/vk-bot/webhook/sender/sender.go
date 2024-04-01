@@ -15,6 +15,7 @@ import (
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/model"
 	model2 "github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/model"
 	log "github.com/sirupsen/logrus"
+	"jaytaylor.com/html2text"
 )
 
 type Sender struct {
@@ -27,12 +28,31 @@ func NewSender(vk *api.VK, db *database.DB, kbrd *keyboard.Keyboard) *Sender {
 	return &Sender{vk: vk, db: db, kbrd: kbrd}
 }
 
-func (s *Sender) Send(B model.WebHookMessage, trigger string) (err error) {
-	if B.Article.Body != "" && B.Article.Internal {
+type Data struct {
+	whMsg   model.WebHookMessage
+	title   string
+	message string
+	kbrd    []byte
+	vk      int
+}
+
+func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
+	if whMsg.Article.Body != "" && whMsg.Article.Internal {
 		return
 	}
 
-	id, err := s.db.SelectVK(B.Ticket.CustomerID)
+	whMsg.Article.Body, err = html2text.FromString(whMsg.Article.Body, html2text.Options{PrettyTables: true})
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	var data = Data{
+		title: fmt.Sprintf("- - #%s %s - -\n", whMsg.Ticket.Number, whMsg.Ticket.Title),
+		whMsg: whMsg,
+	}
+
+	data.vk, err = s.db.SelectVK(data.whMsg.Ticket.CustomerID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
@@ -42,65 +62,103 @@ func (s *Sender) Send(B model.WebHookMessage, trigger string) (err error) {
 		return err
 	}
 
-	var title = fmt.Sprintf("- - #%s %s - -\n", B.Ticket.Number, B.Ticket.Title)
-	var message string
-	var kbrd []byte
-
 	var b = params.NewMessagesSendBuilder()
 	switch trigger {
 	case "botNewMessage":
-		message = fmt.Sprintf("%sСообщение от %s: \"%s\"", title, B.Article.CreatedBy.Displayname, B.Article.Body)
-
-		if kbrd, err = s.kbrd.GetKeyboard(model.SendMessage, keyboard.Data{}); err != nil {
-			return
-		}
+		err = s.botNewMessage(&data)
 	case "botChangeGroup":
-		if B.Ticket.Group.Name != "" {
-			message = fmt.Sprintf("%sИзменена группа: %s.", title, B.Ticket.Group.Name)
-		} else {
-			message = fmt.Sprintf("%sУдалена группа.", title)
-		}
+		err = s.botChangeGroup(&data)
 	case "botChangeOwner":
-		if B.Ticket.Owner.Displayname != nil {
-			message = fmt.Sprintf("%sИзменен ответственный: %s.", title, B.Ticket.Owner.Displayname)
-		} else if (B.Ticket.Owner.Firstname != "" || B.Ticket.Owner.Lastname != "") && B.Ticket.Owner.Firstname != "-" {
-			message = fmt.Sprintf("%sИзменен ответственный: %s %s.", title, B.Ticket.Owner.Firstname, B.Ticket.Owner.Lastname)
-		} else {
-			message = fmt.Sprintf("%sУдален ответственный.", title)
-		}
+		err = s.botChangeOwner(&data)
 	case "botChangeStatus":
-		message = fmt.Sprintf("%sИзменен статус: %s.", title, B.Ticket.State)
+		err = s.botChangeStatus(&data)
 	case "botChangeTitle":
-		message = fmt.Sprintf("%sИзменен заголовок.", title)
+		err = s.botChangeTitle(&data)
 	case "botChangePriority":
-		message = fmt.Sprintf("%sИзменен приоритет: %s.", title, B.Ticket.Priority.Name)
+		err = s.botChangePriority(&data)
 	default:
 		return
 	}
 
-	if string(kbrd) != "" {
-		b.Keyboard(string(kbrd))
+	if err != nil {
+		return
 	}
 
-	if marshal, err := json.Marshal(model2.Ticket{
-		Customer: strconv.Itoa(B.Ticket.CustomerID),
-		ID:       B.Ticket.ID,
-	}); err != nil {
+	if string(data.kbrd) != "" {
+		b.Keyboard(string(data.kbrd))
+	}
+
+	marshal, err := json.Marshal(model2.Ticket{
+		Customer: strconv.Itoa(data.whMsg.Ticket.CustomerID),
+		ID:       data.whMsg.Ticket.ID,
+	})
+	if err != nil {
 		log.Error(err)
 		return
-	} else {
-		b.Payload(string(marshal))
 	}
 
-	b.Message(message)
+	b.Payload(string(marshal))
+	b.Message(data.message)
 	b.RandomID(int(time.Now().Unix()))
-	b.PeerID(id)
+	b.PeerID(data.vk)
 	b.TestMode(true)
 
 	if _, err = s.vk.MessagesSend(b.Params); err != nil {
 		log.Error(err)
-		return
 	}
 
+	return
+}
+
+func (s *Sender) botNewMessage(data *Data) (err error) {
+	data.message = fmt.Sprintf(
+		"%sСообщение от %s: \n\n%s",
+		data.title,
+		data.whMsg.Article.CreatedBy.Displayname,
+		data.whMsg.Article.Body)
+	data.kbrd, err = s.kbrd.GetKeyboard(model.SendMessage, keyboard.Data{})
+	return
+}
+
+func (s *Sender) botChangeGroup(data *Data) (err error) {
+	if data.whMsg.Ticket.Group.Name != "" {
+		data.message = fmt.Sprintf("%sИзменена группа: %s.", data.title, data.whMsg.Ticket.Group.Name)
+	} else {
+		data.message = fmt.Sprintf("%sУдалена группа.", data.title)
+	}
+	return
+}
+
+func (s *Sender) botChangeOwner(data *Data) (err error) {
+	if data.whMsg.Ticket.Owner.Displayname != nil {
+		data.message = fmt.Sprintf(
+			"%sИзменен ответственный: %s.",
+			data.title,
+			data.whMsg.Ticket.Owner.Displayname)
+	} else if (data.whMsg.Ticket.Owner.Firstname != "" || data.whMsg.Ticket.Owner.Lastname != "") &&
+		data.whMsg.Ticket.Owner.Firstname != "-" {
+		data.message = fmt.Sprintf(
+			"%sИзменен ответственный: %s %s.",
+			data.title,
+			data.whMsg.Ticket.Owner.Firstname,
+			data.whMsg.Ticket.Owner.Lastname)
+	} else {
+		data.message = fmt.Sprintf("%sУдален ответственный.", data.title)
+	}
+	return
+}
+
+func (s *Sender) botChangeStatus(data *Data) (err error) {
+	data.message = fmt.Sprintf("%sИзменен статус: %s.", data.title, data.whMsg.Ticket.State)
+	return
+}
+
+func (s *Sender) botChangeTitle(data *Data) (err error) {
+	data.message = fmt.Sprintf("%sИзменен заголовок.", data.title)
+	return
+}
+
+func (s *Sender) botChangePriority(data *Data) (err error) {
+	data.message = fmt.Sprintf("%sИзменен приоритет: %s.", data.title, data.whMsg.Ticket.Priority.Name)
 	return
 }

@@ -1,13 +1,13 @@
 package zammad
 
 import (
-	"github.com/AlessandroSechi/zammad-go"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/config"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/client"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/group"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/object"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/ticket"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/user"
+	"github.com/chazari-x/zammad-go"
 )
 
 type Zammad struct {

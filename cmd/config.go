@@ -40,7 +40,7 @@ func parseConfig(_ *cobra.Command) Config {
 	cfg.DB.User = os.Getenv("POSTGRES_USER")
 	cfg.DB.Port = os.Getenv("POSTGRES_PORT")
 	cfg.DB.Host = os.Getenv("POSTGRES_HOST")
-	cfg.DB.Pass = os.Getenv("POSTGRES_PASSWORD")
+	cfg.DB.Pass = os.Getenv("POSTGRES_PASS")
 
 	return cfg
 }

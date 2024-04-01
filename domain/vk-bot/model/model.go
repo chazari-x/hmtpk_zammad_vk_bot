@@ -176,8 +176,8 @@ func (c Command) Message() string {
 		return `🚫 Вы ввели неверный логин или пароль, повторите попытку! Повторите попытку!
 
 ℹ Сейчас введите логин:`
-	case MyTickets:
-		return "..."
+	//case MyTickets:
+	//	return "..."
 	case CreateTicket, Cancel:
 		return "📄 Ваше обращение 📄\n"
 	case ChangeTitle:

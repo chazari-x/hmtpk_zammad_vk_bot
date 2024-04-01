@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	selectID    = `	SELECT id FROM zammad_vk WHERE vk = $1;`
-	selectVK    = `	SELECT vk FROM zammad_vk WHERE id = $1;`
-	deleteUser  = `	DELETE FROM zammad_vk WHERE vk = $1;`
-	insertUser  = `	INSERT INTO zammad_vk (id, vk) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET vk = $2;`
-	createTable = `	CREATE TABLE IF NOT EXISTS zammad_vk (
-						id 	INTEGER PRIMARY KEY NOT NULL, 
-						vk	INTEGER 			NOT NULL);`
+	selectID     = `SELECT zammad FROM zammad_vk WHERE vk = $1;`
+	selectVK     = `SELECT vk FROM zammad_vk WHERE zammad = $1;`
+	deleteZammad = `DELETE FROM zammad_vk WHERE zammad = $1;`
+	deleteUser   = `DELETE FROM zammad_vk WHERE vk = $1;`
+	insertUser   = `INSERT INTO zammad_vk (zammad, vk) VALUES ($1, $2) ON CONFLICT (zammad) DO UPDATE SET vk = $2;`
+	createTable  = `CREATE TABLE IF NOT EXISTS zammad_vk (
+	zammad 		INTEGER PRIMARY KEY NOT NULL, 
+	vk 			INTEGER 			NOT NULL
+)`
 )
 
 type DB struct {
@@ -58,7 +60,7 @@ func (s *DB) InsertUser(vk, zammad int) (err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
 
-	if _, err = s.DB.ExecContext(ctx, deleteUser, vk); err != nil {
+	if _, err = s.DB.ExecContext(ctx, deleteZammad, zammad); err != nil {
 		log.Error(err)
 		return
 	}
