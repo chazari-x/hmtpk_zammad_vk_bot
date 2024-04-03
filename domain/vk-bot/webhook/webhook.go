@@ -26,6 +26,6 @@ func (wh *WebHook) Start() error {
 	http.HandleFunc("/webhook", wh.h.WebhookHandler)
 
 	// Запускаем сервер на порту
-	log.Tracef("WebHook запущен на порту: %s", wh.cfg.Port)
+	log.Infof("WebHook запущен на порту: %s", wh.cfg.Port)
 	return http.ListenAndServe(wh.cfg.Port, nil)
 }

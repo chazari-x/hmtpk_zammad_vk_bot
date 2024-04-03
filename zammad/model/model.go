@@ -57,30 +57,6 @@ type TicketCreate struct {
 	Type                  string    `json:"type"`
 	UpdatedAt             time.Time `json:"updated_at"`
 	UpdatedByID           int       `json:"updated_by_id"`
-	//CloseAt                   any       `json:"close_at"`
-	//CloseDiffInMin            any       `json:"close_diff_in_min"`
-	//CloseEscalationAt         any       `json:"close_escalation_at"`
-	//CloseInMin                any       `json:"close_in_min"`
-	//EscalationAt              any       `json:"escalation_at"`
-	//FirstResponseAt           any       `json:"first_response_at"`
-	//FirstResponseDiffInMin    any       `json:"first_response_diff_in_min"`
-	//FirstResponseEscalationAt any       `json:"first_response_escalation_at"`
-	//FirstResponseInMin        any       `json:"first_response_in_min"`
-	//LastCloseAt               any       `json:"last_close_at"`
-	//LastContactAgentAt        any       `json:"last_contact_agent_at"`
-	//LastContactAt             any       `json:"last_contact_at"`
-	//LastContactCustomerAt     any       `json:"last_contact_customer_at"`
-	//LastOwnerUpdateAt         any       `json:"last_owner_update_at"`
-	//Note                      any       `json:"note"`
-	//OrganizationID            any       `json:"organization_id"`
-	//PendingTime               any       `json:"pending_time"`
-	//Preferences               struct {
-	//} `json:"preferences"`
-	//TicketTimeAccountingIds []any     `json:"ticket_time_accounting_ids"`
-	//TimeUnit                any       `json:"time_unit"`
-	//UpdateDiffInMin         any       `json:"update_diff_in_min"`
-	//UpdateEscalationAt      any       `json:"update_escalation_at"`
-	//UpdateInMin             any       `json:"update_in_min"`
 }
 
 type Ticket struct {
@@ -97,7 +73,7 @@ type Ticket struct {
 
 type Owner struct {
 	Name string `json:"name"`
-	ID   string `json:"email"`
+	ID   string `json:"id"`
 }
 
 type Type struct {
@@ -137,18 +113,6 @@ type TicketArticle struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	UpdatedBy   string    `json:"updated_by"`
 	UpdatedByID int       `json:"updated_by_id"`
-	//Cc           any       `json:"cc"`
-	//InReplyTo    any       `json:"in_reply_to"`
-	//MessageID    any       `json:"message_id"`
-	//MessageIDMd5 any       `json:"message_id_md5"`
-	//OriginByID   any       `json:"origin_by_id"`
-	//Preferences  struct {
-	//} `json:"preferences"`
-	//References  any       `json:"references"`
-	//ReplyTo     any       `json:"reply_to"`
-	//Subject     any       `json:"subject"`
-	//TimeUnit    any       `json:"time_unit"`
-	//To          any       `json:"to"`
 }
 
 func (t TicketArticleCreate) Interface() (*map[string]interface{}, error) {
@@ -164,32 +128,32 @@ func (t TicketArticleCreate) Interface() (*map[string]interface{}, error) {
 	return &ticket, nil
 }
 
-func (t Ticket) String() string {
-	result := ""
+const p = "\n# %s%s\n"
 
+func (t Ticket) String() (result string) {
 	if t.Title != "" {
-		result += fmt.Sprintf("\n▪ Заголовок:\n%s\n", t.Title)
+		result += fmt.Sprintf(p, "Заголовок: ", t.Title)
 	}
 	if t.Article.Body != "" {
-		result += fmt.Sprintf("\n▪ Описание:\n%s\n", t.Article.Body)
+		result += fmt.Sprintf(p, "Описание: ", t.Article.Body)
 	}
 	if t.Group.Name != "" {
-		result += fmt.Sprintf("\n▪ Группа:\n%s\n", t.Group.Name)
+		result += fmt.Sprintf(p, "Группа: ", t.Group.Name)
 	}
 	if t.Type.Value != "" {
-		result += fmt.Sprintf("\n▪ Тип:\n%s\n", t.Type.Value)
+		result += fmt.Sprintf(p, "Тип: ", t.Type.Value)
 	}
 	if t.Priority != "" {
-		result += fmt.Sprintf("\n▪ Приоритет:\n%s\n", t.Priority)
+		result += fmt.Sprintf(p, "Приоритет: ", t.Priority)
 	}
 	if t.Department != "" {
-		result += fmt.Sprintf("\n▪ Отдел:\n%s\n", t.Department)
+		result += fmt.Sprintf(p, "Отдел: ", t.Department)
 	}
 	if t.Owner.Name != "" {
-		result += fmt.Sprintf("\n▪ Ответственное лицо:\n%s\n", t.Owner.Name)
+		result += fmt.Sprintf(p, "Ответственный: ", t.Owner.Name)
 	}
 
-	return result
+	return
 }
 
 func (t Ticket) Interface() (*map[string]interface{}, error) {
@@ -204,10 +168,6 @@ func (t Ticket) Interface() (*map[string]interface{}, error) {
 	if t.Group.Name == "" {
 		return nil, GroupIsNil
 	}
-
-	//if t.Type.Key == "" {
-	//	return nil, TypeIsNil
-	//}
 
 	customer, err := strconv.Atoi(t.Customer)
 	if err != nil || customer == 0 {
@@ -235,7 +195,6 @@ func (t Ticket) Interface() (*map[string]interface{}, error) {
 	article := make(map[string]interface{})
 
 	article["body"] = t.Article.Body
-	//article["internal"] = true
 	article["sender"] = "Customer"
 	article["content_type"] = "text/plain"
 	article["type"] = "phone"

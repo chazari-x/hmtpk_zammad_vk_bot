@@ -17,27 +17,27 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := parseConfig(cmd)
 
-			log.Trace("Подключение к Zammad...")
+			log.Info("Подключение к Zammad...")
 			z, err := zammad.NewZammad(cfg.Zammad)
 			if err != nil {
 				log.Fatalf("Ошибка подключения к Zammad: %v\n", err)
 			}
-			log.Trace("Подключение к Zammad установлено.")
+			log.Info("Подключение к Zammad установлено.")
 
 			s := storage.NewStorage(cfg.VKBot, cmd.Context())
 
-			log.Trace("Подключение в базе данных...")
+			log.Info("Подключение в базе данных...")
 			db, err := database.NewDB(cfg.DB, cmd.Context())
 			if err != nil {
 				log.Fatalf("Ошибка подключения к базе данных: %v\n", err)
 			}
-			log.Trace("Подключение к базе данных установлено.")
+			log.Info("Подключение к базе данных установлено.")
 			defer func() {
 				_ = db.DB.Close()
 			}()
 
-			log.Trace("Запуск бота для Zammad...")
-			defer log.Trace("Бот для Zammad остановлен.")
+			log.Info("Запуск бота для Zammad...")
+			defer log.Info("Бот для Zammad остановлен.")
 			if err = vkbot.Start(cfg.VKBot, z, s, db); err != nil {
 				log.Fatalf("Ошибка: %v\n", err)
 			}

@@ -18,10 +18,7 @@ type Zammad struct {
 }
 
 func NewZammad(cfg config.Zammad) (*Zammad, error) {
-	c, err := zammad.NewClient(&zammad.Client{
-		Token: cfg.Token,
-		Url:   cfg.Url,
-	})
+	c, err := zammad.NewClient(&zammad.Client{Token: cfg.Token, Url: cfg.Url})
 	if err != nil {
 		return nil, err
 	}

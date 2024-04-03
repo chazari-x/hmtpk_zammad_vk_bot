@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -42,7 +43,7 @@ func (k *Keyboard) GetKeyboard(command model.Command, data Data) (marshal []byte
 	var kbrd model.Keyboard
 	switch command.String() {
 	case model.Home.String():
-		if kbrd, err = k.start(data); err != nil {
+		if kbrd, err = k.home(data); err != nil {
 			return
 		}
 	case model.CreateTicket.String():
@@ -53,10 +54,10 @@ func (k *Keyboard) GetKeyboard(command model.Command, data Data) (marshal []byte
 		if kbrd, err = k.changeTitleOrBody(data); err != nil {
 			return
 		}
-	case model.ChangeType.String():
-		if kbrd, err = k.changeType(data); err != nil {
-			return
-		}
+	//case model.ChangeType.String():
+	//	if kbrd, err = k.changeType(data); err != nil {
+	//		return
+	//	}
 	case model.ChangeGroup.String():
 		if kbrd, err = k.changeGroup(data); err != nil {
 			return
@@ -97,7 +98,7 @@ func (k *Keyboard) GetKeyboard(command model.Command, data Data) (marshal []byte
 	return
 }
 
-func (k *Keyboard) start(_ Data) (model.Keyboard, error) {
+func (k *Keyboard) home(_ Data) (model.Keyboard, error) {
 	return model.Keyboard{
 		Buttons: [][]model.Button{{
 			{
@@ -109,6 +110,7 @@ func (k *Keyboard) start(_ Data) (model.Keyboard, error) {
 				},
 			},
 			{
+				Color: model.Primary,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.MyTickets.Button("")},
@@ -179,25 +181,28 @@ func (k *Keyboard) myTickets(data Data) (kbrd model.Keyboard, err error) {
 		if err != nil {
 			return kbrd, err
 		}
-		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-			Color: model.Primary,
+		key := model.Button{
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: button},
-				Label: fmt.Sprintf("%s...", func() string {
+				Label: func() string {
 					if len(element.Title) > 37 {
-						return element.Title[:37]
+						return fmt.Sprintf("%s...", element.Title[:37])
 					}
 
 					return element.Title
-				}()),
+				}(),
 			},
-		}})
+		}
+		if slices.Contains(ticketsByCustomer.TicketIdsOpen, element.ID) {
+			key.Color = model.Primary
+		}
+		kbrd.Buttons = append(kbrd.Buttons, []model.Button{key})
 	}
 
 	if data.Page > 1 {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-			Color: model.Secondary,
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.MyTickets.Button("-" + strconv.Itoa(data.Page-1))},
@@ -206,6 +211,7 @@ func (k *Keyboard) myTickets(data Data) (kbrd model.Keyboard, err error) {
 		}})
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.MyTickets.Button("-" + strconv.Itoa(data.Page+1))},
@@ -215,6 +221,7 @@ func (k *Keyboard) myTickets(data Data) (kbrd model.Keyboard, err error) {
 		}
 	} else if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.MyTickets.Button("-" + strconv.Itoa(data.Page+1))},
@@ -227,8 +234,8 @@ func (k *Keyboard) myTickets(data Data) (kbrd model.Keyboard, err error) {
 		Color: model.Negative,
 		Action: model.Action{
 			Type:    "callback",
-			Payload: model.Payload{Button: model.Cancel.Button("")},
-			Label:   model.Cancel.String(),
+			Payload: model.Payload{Button: model.Home.Button("")},
+			Label:   model.Home.String(),
 		},
 	}})
 
@@ -271,6 +278,7 @@ func (k *Keyboard) changeDepartment(data Data) (kbrd model.Keyboard, err error) 
 
 	if data.Page > 1 {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangeDepartment.Button("-" + strconv.Itoa(data.Page-1))},
@@ -279,6 +287,7 @@ func (k *Keyboard) changeDepartment(data Data) (kbrd model.Keyboard, err error) 
 		}})
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangeDepartment.Button("-" + strconv.Itoa(data.Page+1))},
@@ -288,6 +297,7 @@ func (k *Keyboard) changeDepartment(data Data) (kbrd model.Keyboard, err error) 
 		}
 	} else if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangeDepartment.Button("-" + strconv.Itoa(data.Page+1))},
@@ -344,6 +354,7 @@ func (k *Keyboard) changeOwner(data Data) (kbrd model.Keyboard, err error) {
 
 	if data.Page > 1 {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangeOwner.Button("-" + strconv.Itoa(data.Page-1))},
@@ -352,6 +363,7 @@ func (k *Keyboard) changeOwner(data Data) (kbrd model.Keyboard, err error) {
 		}})
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangeOwner.Button("-" + strconv.Itoa(data.Page+1))},
@@ -361,6 +373,7 @@ func (k *Keyboard) changeOwner(data Data) (kbrd model.Keyboard, err error) {
 		}
 	} else if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangeOwner.Button("-" + strconv.Itoa(data.Page+1))},
@@ -417,6 +430,7 @@ func (k *Keyboard) changePriority(data Data) (kbrd model.Keyboard, err error) {
 
 	if data.Page > 1 {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangePriority.Button("-" + strconv.Itoa(data.Page-1))},
@@ -425,6 +439,7 @@ func (k *Keyboard) changePriority(data Data) (kbrd model.Keyboard, err error) {
 		}})
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangePriority.Button("-" + strconv.Itoa(data.Page+1))},
@@ -435,6 +450,7 @@ func (k *Keyboard) changePriority(data Data) (kbrd model.Keyboard, err error) {
 	} else {
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangePriority.Button("-" + strconv.Itoa(data.Page+1))},
@@ -491,6 +507,7 @@ func (k *Keyboard) changeGroup(data Data) (kbrd model.Keyboard, err error) {
 	}
 	if data.Page > 1 {
 		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+			Color: model.Positive,
 			Action: model.Action{
 				Type:    "callback",
 				Payload: model.Payload{Button: model.ChangeGroup.Button("-" + strconv.Itoa(data.Page-1))},
@@ -499,6 +516,7 @@ func (k *Keyboard) changeGroup(data Data) (kbrd model.Keyboard, err error) {
 		}})
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangeGroup.Button("-" + strconv.Itoa(data.Page+1))},
@@ -509,6 +527,7 @@ func (k *Keyboard) changeGroup(data Data) (kbrd model.Keyboard, err error) {
 	} else {
 		if float64(data.Page) < math.Ceil(float64(len(list))/4) {
 			kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+				Color: model.Positive,
 				Action: model.Action{
 					Type:    "callback",
 					Payload: model.Payload{Button: model.ChangeGroup.Button("-" + strconv.Itoa(data.Page+1))},
@@ -541,90 +560,93 @@ func (t Types) Len() int           { return len(t) }
 func (t Types) Less(i, j int) bool { return t[i].Value < t[j].Value }
 func (t Types) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
-func (k *Keyboard) changeType(data Data) (kbrd model.Keyboard, err error) {
-	kbrd = model.Keyboard{Buttons: [][]model.Button{}}
-
-	list, err := k.z.Type.List()
-	if err != nil {
-		return
-	}
-
-	var types Types
-	for _, object := range list {
-		if object.Name == "type" {
-			for key := range object.DataOption.Options {
-				types = append(types, Type{Key: key, Value: object.DataOption.Options[key]})
-			}
-			break
-		}
-	}
-
-	sort.Sort(types)
-
-	if float64(data.Page) > math.Ceil(float64(len(types))/4) {
-		data.Page = 1
-	}
-
-	var first = (data.Page - 1) * 4
-	var last = data.Page * 4
-
-	if last > len(types) {
-		last = len(types)
-	}
-
-	for _, t := range types[first:last] {
-		button, err := toButton(t.Key, t.Value)
-		if err != nil {
-			return kbrd, err
-		}
-		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-			Color: model.Primary,
-			Action: model.Action{
-				Type:    "callback",
-				Payload: model.Payload{Button: button},
-				Label:   t.Value,
-			},
-		}})
-	}
-
-	if data.Page > 1 {
-		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-			Action: model.Action{
-				Type:    "callback",
-				Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page-1))},
-				Label:   "Назад",
-			},
-		}})
-		if float64(data.Page) < math.Ceil(float64(len(types))/4) {
-			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
-				Action: model.Action{
-					Type:    "callback",
-					Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page+1))},
-					Label:   "Дальше",
-				},
-			})
-		}
-	} else if float64(data.Page) < math.Ceil(float64(len(types))/4) {
-		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-			Action: model.Action{
-				Type:    "callback",
-				Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page+1))},
-				Label:   "Дальше",
-			},
-		}})
-	}
-
-	kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
-		Color: model.Negative,
-		Action: model.Action{
-			Type:    "callback",
-			Payload: model.Payload{Button: model.Cancel.Button("")},
-			Label:   model.Cancel.String(),
-		},
-	}})
-
-	return
-}
+//func (k *Keyboard) changeType(data Data) (kbrd model.Keyboard, err error) {
+//	kbrd = model.Keyboard{Buttons: [][]model.Button{}}
+//
+//	list, err := k.z.Type.List()
+//	if err != nil {
+//		return
+//	}
+//
+//	var types Types
+//	for _, object := range list {
+//		if object.Name == "type" {
+//			for key := range object.DataOption.Options {
+//				types = append(types, Type{Key: key, Value: object.DataOption.Options[key]})
+//			}
+//			break
+//		}
+//	}
+//
+//	sort.Sort(types)
+//
+//	if float64(data.Page) > math.Ceil(float64(len(types))/4) {
+//		data.Page = 1
+//	}
+//
+//	var first = (data.Page - 1) * 4
+//	var last = data.Page * 4
+//
+//	if last > len(types) {
+//		last = len(types)
+//	}
+//
+//	for _, t := range types[first:last] {
+//		button, err := toButton(t.Key, t.Value)
+//		if err != nil {
+//			return kbrd, err
+//		}
+//		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+//			Color: model.Primary,
+//			Action: model.Action{
+//				Type:    "callback",
+//				Payload: model.Payload{Button: button},
+//				Label:   t.Value,
+//			},
+//		}})
+//	}
+//
+//	if data.Page > 1 {
+//		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+//			Color: model.Positive,
+//			Action: model.Action{
+//				Type:    "callback",
+//				Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page-1))},
+//				Label:   "Назад",
+//			},
+//		}})
+//		if float64(data.Page) < math.Ceil(float64(len(types))/4) {
+//			kbrd.Buttons[len(kbrd.Buttons)-1] = append(kbrd.Buttons[len(kbrd.Buttons)-1], model.Button{
+//				Color: model.Positive,
+//				Action: model.Action{
+//					Type:    "callback",
+//					Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page+1))},
+//					Label:   "Дальше",
+//				},
+//			})
+//		}
+//	} else if float64(data.Page) < math.Ceil(float64(len(types))/4) {
+//		kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+//			Color: model.Positive,
+//			Action: model.Action{
+//				Type:    "callback",
+//				Payload: model.Payload{Button: model.ChangeType.Button("-" + strconv.Itoa(data.Page+1))},
+//				Label:   "Дальше",
+//			},
+//		}})
+//	}
+//
+//	kbrd.Buttons = append(kbrd.Buttons, []model.Button{{
+//		Color: model.Negative,
+//		Action: model.Action{
+//			Type:    "callback",
+//			Payload: model.Payload{Button: model.Cancel.Button("")},
+//			Label:   model.Cancel.String(),
+//		},
+//	}})
+//
+//	return
+//}
 
 func (k *Keyboard) changeTitleOrBody(_ Data) (model.Keyboard, error) {
 	return model.Keyboard{
@@ -661,14 +683,14 @@ func (k *Keyboard) createTicket(_ Data) (model.Keyboard, error) {
 				},
 			},
 			{
-				{
-					Color: model.Primary,
-					Action: model.Action{
-						Type:    "callback",
-						Payload: model.Payload{Button: model.ChangeType.Button("")},
-						Label:   model.ChangeType.String(),
-					},
-				},
+				//{
+				//	Color: model.Primary,
+				//	Action: model.Action{
+				//		Type:    "callback",
+				//		Payload: model.Payload{Button: model.ChangeType.Button("")},
+				//		Label:   model.ChangeType.String(),
+				//	},
+				//},
 				{
 					Color: model.Primary,
 					Action: model.Action{

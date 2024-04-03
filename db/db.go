@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	selectID     = `SELECT zammad FROM zammad_vk WHERE vk = $1;`
+	selectZammad = `SELECT zammad FROM zammad_vk WHERE vk = $1;`
 	selectVK     = `SELECT vk FROM zammad_vk WHERE zammad = $1;`
 	deleteZammad = `DELETE FROM zammad_vk WHERE zammad = $1;`
-	deleteUser   = `DELETE FROM zammad_vk WHERE vk = $1;`
+	deleteVK     = `DELETE FROM zammad_vk WHERE vk = $1;`
 	insertUser   = `INSERT INTO zammad_vk (zammad, vk) VALUES ($1, $2) ON CONFLICT (zammad) DO UPDATE SET vk = $2;`
 	createTable  = `CREATE TABLE IF NOT EXISTS zammad_vk (
 	zammad 		INTEGER PRIMARY KEY NOT NULL, 
@@ -76,7 +76,7 @@ func (s *DB) DeleteUser(vk int) (err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
 
-	if _, err = s.DB.ExecContext(ctx, deleteUser, vk); err != nil {
+	if _, err = s.DB.ExecContext(ctx, deleteVK, vk); err != nil {
 		log.Error(err)
 	}
 
@@ -87,7 +87,7 @@ func (s *DB) SelectZammad(vk int) (zammad int, err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
 
-	if err = s.DB.QueryRowContext(ctx, selectID, vk).Scan(&zammad); err != nil {
+	if err = s.DB.QueryRowContext(ctx, selectZammad, vk).Scan(&zammad); err != nil {
 		log.Error(err)
 	}
 

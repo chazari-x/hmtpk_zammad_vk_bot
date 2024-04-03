@@ -37,7 +37,7 @@ func NewOperationExecutor(vk *api.VK, z *zammad.Zammad, k *keyboard.Keyboard, s 
 var (
 	allResponses = []string{
 		model.ChangeGroup.Key(),
-		model.ChangeType.Key(),
+		//model.ChangeType.Key(),
 		model.ChangePriority.Key(),
 		model.ChangeTitle.Key(),
 		model.ChangeBody.Key(),
@@ -99,14 +99,14 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 	}
 	data.ticket.Customer = strconv.Itoa(data.customer)
 
-	if customer != data.ticket.Customer || data.ticket.Customer == "0" || data.ticket.Customer == "" {
+	if data.ticket.Article.Body == "" && (customer != data.ticket.Customer || data.ticket.Customer == "0") {
 		data.ticket = zammadModel.Ticket{}
 	}
 
 	if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeGroup.Key()+"-") {
 		data.prefix = model.ChangeGroup.Key()
-	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeType.Key()+"-") {
-		data.prefix = model.ChangeType.Key()
+		//} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeType.Key()+"-") {
+		//	data.prefix = model.ChangeType.Key()
 	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeOwner.Key()+"-") {
 		data.prefix = model.ChangeOwner.Key()
 	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.MyTickets.Key()+"-") {
@@ -140,6 +140,10 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 			if err = o.cancel(&data); err != nil {
 				return
 			}
+		case model.Home.Key():
+			if err = o.home(&data); err != nil {
+				return
+			}
 		case "":
 			switch data.get {
 			case model.ChangeTitle.Key():
@@ -164,9 +168,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 		default:
 			if data.page != 0 {
 				switch msg.ButtonPayload.Button.Key {
-				case model.ChangeType.Key():
-					data.command = model.ChangeType
-					data.value = data.command.Key()
+				//case model.ChangeType.Key():
+				//	data.command = model.ChangeType
+				//	data.value = data.command.Key()
 				case model.ChangeGroup.Key():
 					data.command = model.ChangeGroup
 					data.value = data.command.Key()
@@ -201,13 +205,13 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 				}
 
 				data.messageText = data.ticket.String()
-			case model.ChangeType.Key():
-				data.command = model.CreateTicket
-				data.ticket.Type = zammadModel.Type{
-					Key:   msg.ButtonPayload.Button.Key,
-					Value: msg.ButtonPayload.Button.Value,
-				}
-				data.messageText = data.ticket.String()
+			//case model.ChangeType.Key():
+			//	data.command = model.CreateTicket
+			//	data.ticket.Type = zammadModel.Type{
+			//		Key:   msg.ButtonPayload.Button.Key,
+			//		Value: msg.ButtonPayload.Button.Value,
+			//	}
+			//	data.messageText = data.ticket.String()
 			case model.ChangePriority.Key():
 				data.command = model.CreateTicket
 				data.ticket.Priority = msg.ButtonPayload.Button.Value
@@ -243,9 +247,9 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 		case model.ChangeGroup.Key():
 			data.command = model.ChangeGroup
 			data.value = data.command.Key()
-		case model.ChangeType.Key():
-			data.command = model.ChangeType
-			data.value = data.command.Key()
+		//case model.ChangeType.Key():
+		//	data.command = model.ChangeType
+		//	data.value = data.command.Key()
 		case model.ChangePriority.Key():
 			data.command = model.ChangePriority
 			data.value = data.command.Key()
@@ -283,18 +287,22 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 			data.command = model.MyTickets
 			data.value = data.command.Key()
 		case "":
-			switch msg.Text {
+			switch data.msg.Text {
 			case model.Authorization.Key():
 				data.command = model.Home
 				data.value = data.command.Key()
 			case model.Home.Key():
 				data.command = model.Home
 			default:
-				data.command = model.CreateTicket
-				if data.ticket.Article.Body == "" {
-					data.ticket.Title = fmt.Sprintf("Обращение от %s", time.Now().Format(time.RFC822))
-					data.ticket.Article.Body = msg.Text
+				if len(data.msg.Text) > 500 {
+					data.command = model.Home
+					data.messageTextTop = "⚠ Превышено количество символов в описании!"
+					break
 				}
+
+				data.command = model.CreateTicket
+				data.ticket.Title = fmt.Sprintf("%s", time.Now().Format(time.RFC822))
+				data.ticket.Article.Body = data.msg.Text
 
 				if data.ticket.Group.Name == "" {
 					data.command = model.ChangeGroup
@@ -376,8 +384,6 @@ func (o *Operation) deleteAuth(data *Data) (err error) {
 }
 
 func (o *Operation) cancel(data *Data) (err error) {
-	data.ticket.Customer = "0"
-
 	if data.ticket.Group.Name == "" {
 		data.messageTextTop = "♻ Вы отменили создание обращения.\n\n"
 		data.ticket = zammadModel.Ticket{}
@@ -394,7 +400,19 @@ func (o *Operation) cancel(data *Data) (err error) {
 	return
 }
 
+func (o *Operation) home(data *Data) (err error) {
+	data.command = model.Home
+	data.messageText = data.ticket.String()
+	return
+}
+
 func (o *Operation) changeTitle(data *Data) (err error) {
+	if len(data.msg.Text) > 100 {
+		data.command = model.ChangeTitle
+		data.messageTextTop = "⚠ Превышено количество символов в заголовке!"
+		return
+	}
+
 	data.command = model.CreateTicket
 	data.ticket.Title = data.msg.Text
 	data.messageText = data.ticket.String()
@@ -402,6 +420,12 @@ func (o *Operation) changeTitle(data *Data) (err error) {
 }
 
 func (o *Operation) changeBody(data *Data) (err error) {
+	if len(data.msg.Text) > 500 {
+		data.command = model.ChangeBody
+		data.messageTextTop = "⚠ Превышено количество символов в описании!"
+		return
+	}
+
 	data.command = model.CreateTicket
 	data.ticket.Article.Body = data.msg.Text
 	data.messageText = data.ticket.String()
@@ -409,11 +433,17 @@ func (o *Operation) changeBody(data *Data) (err error) {
 }
 
 func (o *Operation) sendMessage(data *Data) (err error) {
+	if len(data.msg.Text) > 100 {
+		data.command = model.SendMessage
+		data.messageTextTop = "⚠ Превышено количество символов в сообщении!"
+		return
+	}
+
 	if err = o.store.Set(data.msg.PeerID, model.Status, ""); err != nil {
 		return
 	}
 
-	data.messageText = "Вы отправили сообщение"
+	data.messageTextTop = "✅ Вы отправили сообщение.\n\n"
 	data.ticket.Article.Body = data.msg.Text
 
 	_, err = o.zammad.Ticket.SendToTicket(data.ticket)
@@ -422,19 +452,6 @@ func (o *Operation) sendMessage(data *Data) (err error) {
 	}
 
 	data.command = model.Home
-
-	//kbrd, err := o.kbrd.GetKeyboard(model.Home, keyboard.Data{})
-	//if err != nil {
-	//	return
-	//}
-	//
-	//var b = params.NewMessagesSendBuilder()
-	//b.Keyboard(string(kbrd))
-	//b.Message(messageText)
-	//b.RandomID(int(time.Now().Unix()))
-	//b.PeerID(data.msg.PeerID)
-	//b.TestMode(true)
-	//_, err = o.vk.MessagesSend(b.Params)
 	return
 }
 

@@ -37,10 +37,6 @@ type Data struct {
 }
 
 func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
-	if whMsg.Article.Body != "" && whMsg.Article.Internal {
-		return
-	}
-
 	whMsg.Article.Body, err = html2text.FromString(whMsg.Article.Body, html2text.Options{PrettyTables: true})
 	if err != nil {
 		log.Error(err)
@@ -48,7 +44,7 @@ func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
 	}
 
 	var data = Data{
-		title: fmt.Sprintf("- - #%s %s - -\n", whMsg.Ticket.Number, whMsg.Ticket.Title),
+		title: fmt.Sprintf("📄 #%s %s\n", whMsg.Ticket.Number, whMsg.Ticket.Title),
 		whMsg: whMsg,
 	}
 
@@ -76,6 +72,8 @@ func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
 		err = s.botChangeTitle(&data)
 	case "botChangePriority":
 		err = s.botChangePriority(&data)
+	case "botNewTicket":
+		err = s.botNewTicket(&data)
 	default:
 		return
 	}
@@ -116,6 +114,15 @@ func (s *Sender) botNewMessage(data *Data) (err error) {
 		data.title,
 		data.whMsg.Article.CreatedBy.Displayname,
 		data.whMsg.Article.Body)
+	data.kbrd, err = s.kbrd.GetKeyboard(model.SendMessage, keyboard.Data{})
+	return
+}
+
+func (s *Sender) botNewTicket(data *Data) (err error) {
+	data.message = fmt.Sprintf(
+		"📄 Вами создано новое обращение: \n#%s %s",
+		data.whMsg.Ticket.Number,
+		data.whMsg.Ticket.Title)
 	data.kbrd, err = s.kbrd.GetKeyboard(model.SendMessage, keyboard.Data{})
 	return
 }
