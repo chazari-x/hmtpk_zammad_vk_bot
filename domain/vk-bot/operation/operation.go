@@ -12,14 +12,17 @@ import (
 
 	"github.com/SevereCloud/vksdk/v2/api"
 	"github.com/SevereCloud/vksdk/v2/api/params"
+	"github.com/chazari-x/hmtpk_zammad_vk_bot/config"
 	database "github.com/chazari-x/hmtpk_zammad_vk_bot/db"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/keyboard"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/model"
+	"github.com/chazari-x/hmtpk_zammad_vk_bot/security"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/storage"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad"
 	zammadModel "github.com/chazari-x/hmtpk_zammad_vk_bot/zammad/model"
 	r "github.com/go-redis/redis/v8"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 )
 
 type Operation struct {
@@ -28,36 +31,21 @@ type Operation struct {
 	kbrd   *keyboard.Keyboard
 	store  *storage.Storage
 	db     *database.DB
+	oauth  config.OAuth
+	sec    *security.Security
 }
 
-func NewOperationExecutor(vk *api.VK, z *zammad.Zammad, k *keyboard.Keyboard, s *storage.Storage, db *database.DB) *Operation {
-	return &Operation{vk: vk, zammad: z, kbrd: k, store: s, db: db}
+func NewOperationExecutor(
+	vk *api.VK,
+	z *zammad.Zammad,
+	k *keyboard.Keyboard,
+	s *storage.Storage,
+	db *database.DB,
+	oauth config.OAuth,
+	sec *security.Security,
+) *Operation {
+	return &Operation{vk: vk, zammad: z, kbrd: k, store: s, db: db, oauth: oauth, sec: sec}
 }
-
-var (
-	allResponses = []string{
-		model.ChangeGroup.Key(),
-		//model.ChangeType.Key(),
-		model.ChangePriority.Key(),
-		model.ChangeTitle.Key(),
-		model.ChangeBody.Key(),
-		model.CreateTicket.Key(),
-		model.ChangeOwner.Key(),
-		model.ChangeDepartment.Key(),
-		model.MyTickets.Key(),
-		model.Password.Key(),
-		model.Authorization.Key(),
-		model.SendMessage.Key(),
-	}
-
-	textResponses = []string{
-		model.ChangeTitle.Key(),
-		model.ChangeBody.Key(),
-		model.Password.Key(),
-		model.Authorization.Key(),
-		model.SendMessage.Key(),
-	}
-)
 
 type Data struct {
 	page           int
@@ -69,69 +57,91 @@ type Data struct {
 	prefix         string
 	messageText    string
 	messageTextTop string
+	link           string
 	msg            model.Message
 	command        model.Command
-	ticket         zammadModel.Ticket
+	ticket         zammadModel.BotTicket
 }
 
 func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
-	var data = Data{
-		msg: msg,
-	}
+	var data = Data{msg: msg}
 
+	// получить последнюю активность
 	if data.get, err = o.store.Get(msg.PeerID, model.Status); err != nil && !errors.Is(err, r.Nil) {
 		return
 	}
 
+	// получить ticket из message payload или создать пустой тикет
 	if msg.MessagePayload != "" {
 		log.Trace(msg.MessagePayload)
 		if err = json.Unmarshal([]byte(msg.MessagePayload), &data.ticket); err != nil {
-			data.ticket = zammadModel.Ticket{}
+			data.ticket = zammadModel.BotTicket{}
 		}
 	} else {
-		data.ticket = zammadModel.Ticket{}
+		data.ticket = zammadModel.BotTicket{}
 	}
 
-	customer := data.ticket.Customer
-
-	if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return
-	}
-	data.ticket.Customer = strconv.Itoa(data.customer)
-
-	if data.ticket.Article.Body == "" && (customer != data.ticket.Customer || data.ticket.Customer == "0") {
-		data.ticket = zammadModel.Ticket{}
-	}
-
-	if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeGroup.Key()+"-") {
-		data.prefix = model.ChangeGroup.Key()
-		//} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeType.Key()+"-") {
-		//	data.prefix = model.ChangeType.Key()
-	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeOwner.Key()+"-") {
-		data.prefix = model.ChangeOwner.Key()
-	} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.MyTickets.Key()+"-") {
-		data.prefix = model.MyTickets.Key()
+	// получение zammad user id из базы данных; если customer from ticket != zammad user id, то удалить ticket
+	{
+		customer := data.ticket.Customer
+		if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return
+		}
+		data.ticket.Customer = strconv.Itoa(data.customer)
+		if data.ticket.Article.Body == "" && (customer != data.ticket.Customer || data.ticket.Customer == "0") {
+			data.ticket = zammadModel.BotTicket{Customer: data.ticket.Customer}
+		}
 	}
 
-	if data.prefix != "" {
-		if data.page, err = strconv.Atoi(strings.TrimPrefix(msg.ButtonPayload.Button.Key, data.prefix+"-")); err == nil {
-			msg.ButtonPayload.Button = model.MorePayload{Key: data.prefix, Value: data.prefix}
+	// получить префикс и страницу (в случае если выполняется переход по страницам кнопок)
+	{
+		if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeGroup.Key()+"-") {
+			data.prefix = model.ChangeGroup.Key()
+		} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeType.Key()+"-") {
+			data.prefix = model.ChangeType.Key()
+		} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.ChangeOwner.Key()+"-") {
+			data.prefix = model.ChangeOwner.Key()
+		} else if strings.HasPrefix(msg.ButtonPayload.Button.Key, model.MyTickets.Key()+"-") {
+			data.prefix = model.MyTickets.Key()
+		}
+
+		if data.prefix != "" {
+			if data.page, err = strconv.Atoi(strings.TrimPrefix(msg.ButtonPayload.Button.Key, data.prefix+"-")); err == nil {
+				msg.ButtonPayload.Button = model.MorePayload{Key: data.prefix, Value: data.prefix}
+			}
+		}
+	}
+
+	// получить ticket id и customer (в случае, если нажата кнопка под уведомлением из zammad)
+	if strings.HasPrefix(data.msg.ButtonPayload.Button.Key, model.SendMessage.Key()) {
+		postfix := strings.Replace(data.msg.ButtonPayload.Button.Key, model.SendMessage.Key(), "", 1)
+		if postfix != "" {
+			elements := strings.Split(postfix, "-")
+			if len(elements) == 2 {
+				if elements[1] == data.ticket.Customer {
+					if data.ticket.ID, err = strconv.Atoi(elements[0]); err != nil {
+						return
+					}
+					data.msg.ButtonPayload.Button.Key = model.SendMessage.Key()
+				}
+			}
 		}
 	}
 
 	log.Tracef(
-		"customer: %d | get: %s | button value: %s | button key: %s",
-		data.customer,
-		data.get,
-		msg.ButtonPayload.Button.Value,
-		msg.ButtonPayload.Button.Key,
+		"message: %s | customer: %d | get: %s | button value: %s | button key: %s",
+		data.msg.Text, data.customer, data.get, data.msg.ButtonPayload.Button.Value, data.msg.ButtonPayload.Button.Key,
 	)
 
-	if data.get != "" && (slices.Contains(allResponses, data.get)) &&
-		(msg.ButtonPayload.Button.Key != "" || slices.Contains(textResponses, data.get)) {
-		switch msg.ButtonPayload.Button.Key {
-		case model.CancelAuth.Key():
-			data.command = model.CancelAuth
+	if data.customer == 0 {
+		if err = o.authorization(&data); err != nil {
+			return
+		}
+	} else if slices.Contains([]string{
+		model.Home.Key(), model.DeleteAuth.Key(), model.CancelSend.Key(), model.Cancel.Key(),
+		model.Delete.Key(), model.Send.Key(), model.Authorization.Key(),
+	}, data.msg.ButtonPayload.Button.Key) {
+		switch data.msg.ButtonPayload.Button.Key {
 		case model.DeleteAuth.Key():
 			if err = o.deleteAuth(&data); err != nil {
 				return
@@ -140,186 +150,68 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 			if err = o.cancel(&data); err != nil {
 				return
 			}
-		case model.Home.Key():
+		case model.CancelSend.Key():
+			if err = o.cancelSend(&data); err != nil {
+				return
+			}
+		case model.Home.Key(), model.Authorization.Key():
 			if err = o.home(&data); err != nil {
 				return
 			}
-		case "":
-			switch data.get {
-			case model.ChangeTitle.Key():
-				if err = o.changeTitle(&data); err != nil {
-					return
-				}
-			case model.ChangeBody.Key():
-				if err = o.changeBody(&data); err != nil {
-					return
-				}
-			case model.SendMessage.Key():
-				if err = o.sendMessage(&data); err != nil {
-					return
-				}
-			case model.Password.Key():
-				if err = o.password(&data); err != nil {
-					return
-				}
-			default:
-				data.command = isAuthorization(data.customer)
+		case model.Delete.Key():
+			if err = o.delete(&data); err != nil {
+				return
 			}
-		default:
-			if data.page != 0 {
-				switch msg.ButtonPayload.Button.Key {
-				//case model.ChangeType.Key():
-				//	data.command = model.ChangeType
-				//	data.value = data.command.Key()
-				case model.ChangeGroup.Key():
-					data.command = model.ChangeGroup
-					data.value = data.command.Key()
-				case model.ChangeOwner.Key():
-					data.command = model.ChangeOwner
-					data.value = data.command.Key()
-				case model.ChangeDepartment.Key():
-					data.command = model.ChangeDepartment
-					data.value = data.command.Key()
-				case model.MyTickets.Key():
-					data.command = model.MyTickets
-					data.value = data.command.Key()
-				default:
-					data.command = isAuthorization(data.customer)
-				}
-
-				break
-			}
-
-			switch data.get {
-			case model.ChangeGroup.Key():
-				if data.ticket.Owner.Name != "" {
-					data.ticket.Department = ""
-					data.ticket.Owner = zammadModel.Owner{}
-					data.messageTextTop += "⚠ Ответственный был сброшен из-за изменения отдела!\n\n"
-				}
-
-				data.command = model.CreateTicket
-				data.ticket.Group.Name = msg.ButtonPayload.Button.Value
-				if data.ticket.Group.ID, err = strconv.Atoi(msg.ButtonPayload.Button.Key); err != nil {
-					return
-				}
-
-				data.messageText = data.ticket.String()
-			//case model.ChangeType.Key():
-			//	data.command = model.CreateTicket
-			//	data.ticket.Type = zammadModel.Type{
-			//		Key:   msg.ButtonPayload.Button.Key,
-			//		Value: msg.ButtonPayload.Button.Value,
-			//	}
-			//	data.messageText = data.ticket.String()
-			case model.ChangePriority.Key():
-				data.command = model.CreateTicket
-				data.ticket.Priority = msg.ButtonPayload.Button.Value
-				data.messageText = data.ticket.String()
-			case model.ChangeOwner.Key():
-				data.command = model.CreateTicket
-				data.ticket.Owner = zammadModel.Owner{
-					Name: msg.ButtonPayload.Button.Value,
-					ID:   msg.ButtonPayload.Button.Key,
-				}
-				data.messageText = data.ticket.String()
-			case model.ChangeDepartment.Key():
-				data.command = model.ChangeOwner
-				data.value = data.command.Key()
-				data.ticket.Department = msg.ButtonPayload.Button.Value
-			case model.MyTickets.Key():
-				data.command = model.Home
-				data.value = data.command.Key()
-			default:
-				data.command = isAuthorization(data.customer)
+		case model.Send.Key():
+			if err = o.send(&data); err != nil {
+				return
 			}
 		}
-	} else if data.customer > 0 {
-		switch msg.ButtonPayload.Button.Key {
-		case model.Home.Key():
-			data.command = model.Home
-		case model.ChangeTitle.Key():
-			data.command = model.ChangeTitle
-			data.value = data.command.Key()
-		case model.ChangeBody.Key():
-			data.command = model.ChangeBody
-			data.value = data.command.Key()
-		case model.ChangeGroup.Key():
-			data.command = model.ChangeGroup
-			data.value = data.command.Key()
-		//case model.ChangeType.Key():
-		//	data.command = model.ChangeType
-		//	data.value = data.command.Key()
-		case model.ChangePriority.Key():
-			data.command = model.ChangePriority
-			data.value = data.command.Key()
-		case model.ChangeOwner.Key():
-			data.command = model.ChangeDepartment
-			data.value = data.command.Key()
-		case model.Cancel.Key():
-			data.command = model.CreateTicket
-		case model.Delete.Key():
-			data.ticket = zammadModel.Ticket{}
-			data.command = model.Home
-			data.messageTextTop = "♻ Вы удалили своё обращение.\n\n"
-		case model.Send.Key():
-			if _, err = o.zammad.Ticket.Create(data.ticket); err != nil {
-				return err
-			}
-			data.ticket = zammadModel.Ticket{}
-			data.command = model.Home
-			data.messageTextTop = "✅ Вы отправили своё обращение.\n\n"
-		case model.DeleteAuth.Key():
-			data.command = model.DeleteAuth
-			data.value = data.command.Key()
-			data.customer = 0
-			data.ticket.Customer = "0"
-			if err = o.db.DeleteUser(msg.PeerID); err != nil {
+	} else if data.ticket.ID == 0 {
+		if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeTitle.Key()) {
+			if err = o.changeTitle(&data); err != nil {
 				return
 			}
-		case model.SendMessage.Key():
-			data.command = model.SendMessage
-			data.value = data.command.Key()
-			if data.marshal, err = json.Marshal(data.ticket); err != nil {
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeGroup.Key()) {
+			if err = o.changeGroup(&data); err != nil {
 				return
 			}
-		case model.MyTickets.Key():
-			data.command = model.MyTickets
-			data.value = data.command.Key()
-		case "":
-			switch data.msg.Text {
-			case model.Authorization.Key():
-				data.command = model.Home
-				data.value = data.command.Key()
-			case model.Home.Key():
-				data.command = model.Home
-			default:
-				if len(data.msg.Text) > 500 {
-					data.command = model.Home
-					data.messageTextTop = "⚠ Превышено количество символов в описании!"
-					break
-				}
-
-				data.command = model.CreateTicket
-				data.ticket.Title = fmt.Sprintf("%s", time.Now().Format(time.RFC822))
-				data.ticket.Article.Body = data.msg.Text
-
-				if data.ticket.Group.Name == "" {
-					data.command = model.ChangeGroup
-					data.value = data.command.Key()
-					data.messageText = data.ticket.Group.Name
-				} else {
-					data.messageText = data.ticket.String()
-				}
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeBody.Key()) ||
+			data.msg.ButtonPayload.Button.Key == "" {
+			if err = o.changeBody(&data); err != nil {
+				return
 			}
-		default:
-			data.command = model.Home
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeType.Key()) {
+			if err = o.changeType(&data); err != nil {
+				return
+			}
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangePriority.Key()) {
+			if err = o.changePriority(&data); err != nil {
+				return
+			}
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeDepartment.Key()) {
+			if err = o.changeDepartment(&data); err != nil {
+				return
+			}
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.ChangeOwner.Key()) {
+			if err = o.changeOwner(&data); err != nil {
+				return
+			}
+		} else if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.MyTickets.Key()) {
+			if err = o.myTickets(&data); err != nil {
+				return
+			}
 		}
 	} else {
-		err = o.authorization(&data)
-		if err != nil {
-			log.Error(err)
-			return
+		if slices.Contains([]string{data.msg.ButtonPayload.Button.Key, data.get}, model.SendMessage.Key()) ||
+			data.msg.ButtonPayload.Button.Key == "" {
+			if err = o.sendMessage(&data); err != nil {
+				return
+			}
+		} else if slices.Contains([]string{data.get}, model.MyTickets.Key()) {
+			if err = o.myTickets(&data); err != nil {
+				return
+			}
 		}
 	}
 
@@ -329,28 +221,24 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 	}
 
 	data.messageText = data.messageTextTop + data.command.Message() + data.messageText
-
 	if data.messageText == "" {
 		return
 	}
 
-	if data.command.Message() != model.SendMessage.Message() {
-		if data.kbrd, err = o.kbrd.GetKeyboard(data.command, keyboard.Data{
-			Page:       data.page,
-			Department: data.ticket.Department,
-			Group:      data.ticket.Group.ID,
-			Customer:   data.customer,
-		}); err != nil {
-			log.Error(err)
-			return
-		}
+	if data.kbrd, err = o.kbrd.GetKeyboard(data.command, keyboard.Data{
+		Page:       data.page,
+		Department: data.ticket.Department,
+		Group:      data.ticket.Group.ID,
+		Customer:   data.customer,
+		Link:       data.link,
+	}); err != nil {
+		log.Error(err)
+		return
 	}
 
-	if data.marshal == nil {
-		if data.marshal, err = json.Marshal(data.ticket); err != nil {
-			log.Error(err)
-			return
-		}
+	if data.marshal, err = json.Marshal(data.ticket); err != nil {
+		log.Error(err)
+		return
 	}
 
 	var b = params.NewMessagesSendBuilder()
@@ -360,23 +248,15 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 	b.PeerID(msg.PeerID)
 	b.Payload(string(data.marshal))
 	b.TestMode(true)
-	_, err = o.vk.MessagesSend(b.Params)
-	if err != nil {
+	if _, err = o.vk.MessagesSend(b.Params); err != nil {
 		log.Error(err)
 	}
 
 	return
 }
 
-func isAuthorization(customer int) model.Command {
-	if customer <= 0 {
-		return model.Authorization
-	}
-
-	return model.Home
-}
-
 func (o *Operation) deleteAuth(data *Data) (err error) {
+	data.link = o.zammadOAuthLink(data)
 	data.command = model.DeleteAuth
 	data.customer = 0
 	data.ticket.Customer = "0"
@@ -386,27 +266,157 @@ func (o *Operation) deleteAuth(data *Data) (err error) {
 func (o *Operation) cancel(data *Data) (err error) {
 	if data.ticket.Group.Name == "" {
 		data.messageTextTop = "♻ Вы отменили создание обращения.\n\n"
-		data.ticket = zammadModel.Ticket{}
+		data.ticket = zammadModel.BotTicket{}
 		data.command = model.Home
-		return
+	} else {
+		if data.ticket.Owner.Name == "" {
+			data.ticket.Department = ""
+		}
+		data.command = model.CreateTicket
+		data.messageText = data.ticket.String()
 	}
+	return
+}
 
-	if data.ticket.Owner.Name == "" {
-		data.ticket.Department = ""
+func (o *Operation) cancelSend(data *Data) (err error) {
+	data.messageTextTop = "♻ Вы отменили отправку сообщения.\n\n"
+	data.ticket.ID = 0
+	if data.ticket.Group.Name == "" {
+		data.command = model.Home
+	} else {
+		data.command = model.CreateTicket
 	}
-
-	data.command = model.CreateTicket
-	data.messageText = data.ticket.String()
 	return
 }
 
 func (o *Operation) home(data *Data) (err error) {
 	data.command = model.Home
+	data.ticket = zammadModel.BotTicket{}
+	return
+}
+
+func (o *Operation) delete(data *Data) (err error) {
+	data.ticket = zammadModel.BotTicket{}
+	data.command = model.Home
+	data.messageTextTop = "♻ Вы удалили своё обращение.\n\n"
+	return
+}
+
+func (o *Operation) send(data *Data) (err error) {
+	if _, err = o.zammad.Ticket.Create(data.ticket); err != nil {
+		return err
+	}
+	data.ticket = zammadModel.BotTicket{}
+	data.command = model.Home
+	data.messageTextTop = "✅ Вы отправили своё обращение.\n\n"
+	return
+}
+
+func (o *Operation) changeGroup(data *Data) (err error) {
+	if data.page != 0 || data.get == "" {
+		data.command = model.ChangeGroup
+		data.value = data.command.Key()
+		return
+	}
+
+	if data.ticket.Owner.Name != "" && data.ticket.Group.Name != data.msg.ButtonPayload.Button.Value {
+		data.ticket.Department = ""
+		data.ticket.Owner = zammadModel.Owner{}
+		data.messageTextTop += "⚠ Ответственный был сброшен из-за изменения группы!\n\n"
+	}
+
+	data.command = model.CreateTicket
+	data.ticket.Group.Name = data.msg.ButtonPayload.Button.Value
+	if data.ticket.Group.ID, err = strconv.Atoi(data.msg.ButtonPayload.Button.Key); err != nil {
+		return
+	}
+
+	data.messageText = data.ticket.String()
+	return
+}
+
+func (o *Operation) changeOwner(data *Data) (err error) {
+	if data.get == "" {
+		data.command = model.ChangeDepartment
+		data.value = data.command.Key()
+		return
+	}
+	if data.page != 0 {
+		data.command = model.ChangeOwner
+		data.value = data.command.Key()
+		return
+	}
+
+	data.command = model.CreateTicket
+	data.ticket.Owner = zammadModel.Owner{
+		Name: data.msg.ButtonPayload.Button.Value,
+		ID:   data.msg.ButtonPayload.Button.Key,
+	}
+	data.messageText = data.ticket.String()
+	return
+}
+
+func (o *Operation) changeDepartment(data *Data) (err error) {
+	if data.page != 0 || data.get == "" {
+		data.command = model.ChangeDepartment
+		data.value = data.command.Key()
+		return
+	}
+
+	data.command = model.ChangeOwner
+	data.value = data.command.Key()
+	data.ticket.Department = data.msg.ButtonPayload.Button.Value
+	return
+}
+
+func (o *Operation) changePriority(data *Data) (err error) {
+	if data.get == "" {
+		data.command = model.ChangePriority
+		data.value = data.command.Key()
+		return
+	}
+
+	data.command = model.CreateTicket
+	data.ticket.Priority = data.msg.ButtonPayload.Button.Value
+	data.messageText = data.ticket.String()
+	return
+}
+
+func (o *Operation) myTickets(data *Data) (err error) {
+	if data.page != 0 || data.get == "" {
+		data.command = model.MyTickets
+		data.value = data.command.Key()
+		return
+	}
+
+	data.command = model.SendMessage
+	data.value = data.command.Key()
+	return
+}
+
+func (o *Operation) changeType(data *Data) (err error) {
+	if data.page != 0 || data.get == "" {
+		data.command = model.ChangeType
+		data.value = data.command.Key()
+		return
+	}
+
+	data.command = model.CreateTicket
+	data.ticket.Type = zammadModel.Type{
+		Key:   data.msg.ButtonPayload.Button.Key,
+		Value: data.msg.ButtonPayload.Button.Value,
+	}
 	data.messageText = data.ticket.String()
 	return
 }
 
 func (o *Operation) changeTitle(data *Data) (err error) {
+	if data.get == "" || data.msg.ButtonPayload.Button.Key != "" {
+		data.command = model.ChangeTitle
+		data.value = data.command.Key()
+		return
+	}
+
 	if len(data.msg.Text) > 100 {
 		data.command = model.ChangeTitle
 		data.messageTextTop = "⚠ Превышено количество символов в заголовке!"
@@ -420,85 +430,89 @@ func (o *Operation) changeTitle(data *Data) (err error) {
 }
 
 func (o *Operation) changeBody(data *Data) (err error) {
-	if len(data.msg.Text) > 500 {
+	if data.get == "" && data.msg.ButtonPayload.Button.Key == model.ChangeBody.Key() {
 		data.command = model.ChangeBody
+		data.value = data.command.Key()
+		return
+	}
+
+	if len(data.msg.Text) > 500 {
+		if data.ticket.Article.Body != "" {
+			data.command = model.ChangeBody
+		} else {
+			data.command = model.Home
+		}
 		data.messageTextTop = "⚠ Превышено количество символов в описании!"
 		return
 	}
 
+	if data.ticket.Title == "" {
+		data.ticket.Title = func() string {
+			text := strings.SplitAfter(strings.TrimSpace(data.msg.Text), "\n")[0]
+			if len(text) > 100 {
+				return text[0:100]
+			}
+			return text
+		}()
+	}
+
 	data.command = model.CreateTicket
 	data.ticket.Article.Body = data.msg.Text
-	data.messageText = data.ticket.String()
+
+	if data.ticket.Group.Name == "" {
+		data.command = model.ChangeGroup
+		data.value = data.command.Key()
+		data.messageText = data.ticket.Group.Name
+	} else {
+		data.messageText = data.ticket.String()
+	}
+
 	return
 }
 
 func (o *Operation) sendMessage(data *Data) (err error) {
-	if len(data.msg.Text) > 100 {
+	if data.ticket, err = o.zammad.Ticket.TicketById(strconv.Itoa(data.ticket.ID)); err != nil {
+		return
+	}
+	if data.get == "" && data.msg.ButtonPayload.Button.Key == model.SendMessage.Key() ||
+		data.ticket.Article.Body == "" && data.msg.Text == "" {
 		data.command = model.SendMessage
-		data.messageTextTop = "⚠ Превышено количество символов в сообщении!"
+		data.value = data.command.Key()
+		data.messageTextTop = data.ticket.String()
 		return
 	}
 
-	if err = o.store.Set(data.msg.PeerID, model.Status, ""); err != nil {
+	ticket := data.ticket
+	ticket.Article.Body = data.msg.Text
+	if _, err = o.zammad.Ticket.SendToTicket(ticket); err != nil {
 		return
 	}
 
 	data.messageTextTop = "✅ Вы отправили сообщение.\n\n"
-	data.ticket.Article.Body = data.msg.Text
-
-	_, err = o.zammad.Ticket.SendToTicket(data.ticket)
-	if err != nil {
-		return
-	}
-
+	data.ticket.ID = 0
 	data.command = model.Home
 	return
 }
 
 func (o *Operation) authorization(data *Data) (err error) {
-	var b = params.NewMessagesDeleteBuilder()
-	b.MessageIDs([]int{data.msg.ID})
-	b.PeerID(data.msg.PeerID)
-	b.TestMode(true)
-	_, err = o.vk.MessagesDelete(b.Params)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	data.command = model.Password
-	data.value = data.command.Key()
-	err = o.store.Set(data.msg.PeerID, model.User, data.msg.Text)
+	data.link = o.zammadOAuthLink(data)
+	data.command = model.Authorization
 	return
 }
 
-func (o *Operation) password(data *Data) (err error) {
-	var b = params.NewMessagesDeleteBuilder()
-	b.MessageIDs([]int{data.msg.ID})
-	b.PeerID(data.msg.PeerID)
-	b.TestMode(true)
-	_, err = o.vk.MessagesDelete(b.Params)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	var get string
-	if get, err = o.store.Get(data.msg.PeerID, model.User); err != nil && !errors.Is(err, r.Nil) {
-		return
-	}
-
-	me, err := o.zammad.User.Me(get, data.msg.Text)
-	if err != nil {
-		err = nil
-		data.command = model.ErrorAuth
-		return
-	}
-
-	data.customer = me.ID
-	data.ticket.Customer = strconv.Itoa(me.ID)
-	data.command = model.Home
-	data.messageTextTop = "✅ Вы подтвердили свою личность!\n\n"
-
-	return o.db.InsertUser(data.msg.PeerID, data.customer)
+func (o *Operation) zammadOAuthLink(data *Data) string {
+	return (&oauth2.Config{
+		ClientID:     o.oauth.ClientID,
+		ClientSecret: o.oauth.ClientSecret,
+		RedirectURL: fmt.Sprintf(
+			"%s?user_sign=%d_%s",
+			o.oauth.RedirectURL,
+			data.msg.PeerID,
+			o.sec.CreateHmacSignature([]byte(strconv.Itoa(data.msg.PeerID))),
+		),
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  o.oauth.AuthURL,
+			TokenURL: o.oauth.TokenURL,
+		},
+	}).AuthCodeURL("")
 }

@@ -1,37 +1,44 @@
 package config
 
 type VKBot struct {
-	Token   string  `yaml:"token"`
-	WebHook WebHook `yaml:"webhook"`
-	Api     Api     `yaml:"api"`
+	Token   string
+	Href    string
+	Chat    string
+	WebHook WebHook
 }
 
-type Api struct {
-	Href      string `yaml:"href"`
-	SecretKey string `yaml:"secret-key"`
+type Security struct {
+	SecretKey string
 }
 
 type WebHook struct {
-	Port        string `yaml:"port"`
-	SecretKey   string `yaml:"secret-key"`
-	TriggerName string `yaml:"trigger-name"`
+	Port  string
+	OAuth OAuth
+}
+
+type OAuth struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	AuthURL      string
+	TokenURL     string
 }
 
 type Zammad struct {
-	Token string `yaml:"token"`
-	Url   string `yaml:"url"`
+	Token string
+	Url   string
 }
 
 type Redis struct {
-	Host string `yaml:"host"`
-	Port string `yaml:"port"`
-	Pass string `yaml:"password"`
+	Host string
+	Port string
+	Pass string
 }
 
 type DataBase struct {
-	Host string `yaml:"host"`
-	Port string `yaml:"port"`
-	User string `yaml:"user"`
-	Pass string `yaml:"pass"`
-	Name string `yaml:"name"`
+	Host string
+	Port string
+	User string
+	Pass string
+	Name string
 }

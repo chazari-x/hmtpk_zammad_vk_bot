@@ -17,20 +17,20 @@ func NewGroupController(client *zammad.Client) *Group {
 }
 
 func (t *Group) List() (Groups []model.Group, err error) {
-	list, err := t.client.GroupList()
+	data, err := t.client.GroupList()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	listBytes, err := json.Marshal(*list)
+	bytes, err := json.Marshal(*data)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
 	var allGroups []model.Group
-	if err = json.Unmarshal(listBytes, &allGroups); err != nil {
+	if err = json.Unmarshal(bytes, &allGroups); err != nil {
 		log.Error(err)
 		return
 	}

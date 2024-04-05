@@ -31,7 +31,7 @@ type Response struct {
 }
 
 func (s *Storage) send(href string) (res []byte, err error) {
-	href = fmt.Sprintf("%s%s&v=5.199&access_token=%s", s.cfg.Api.Href, href, s.cfg.Token)
+	href = fmt.Sprintf("%s%s&v=5.199&access_token=%s", s.cfg.Href, href, s.cfg.Token)
 	get, err := http.Get(href)
 	if err != nil {
 		return

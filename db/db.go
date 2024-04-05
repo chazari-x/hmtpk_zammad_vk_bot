@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -87,7 +88,7 @@ func (s *DB) SelectZammad(vk int) (zammad int, err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
 
-	if err = s.DB.QueryRowContext(ctx, selectZammad, vk).Scan(&zammad); err != nil {
+	if err = s.DB.QueryRowContext(ctx, selectZammad, vk).Scan(&zammad); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Error(err)
 	}
 
@@ -98,7 +99,7 @@ func (s *DB) SelectVK(zammad int) (vk int, err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
 
-	if err = s.DB.QueryRowContext(ctx, selectVK, zammad).Scan(&vk); err != nil {
+	if err = s.DB.QueryRowContext(ctx, selectVK, zammad).Scan(&vk); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Error(err)
 	}
 

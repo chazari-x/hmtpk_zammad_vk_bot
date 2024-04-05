@@ -6,25 +6,30 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD # change
     restart: always
     ports:
       - "5432:5432"
   vk-bot:
-    container_name: zammad-bot
+    container_name: vk-bot
     image: chazari/zammad-vk-bot:latest
     environment:
-      VK_TOKEN: token
+      VK_TOKEN: VK_TOKEN # change
       VK_API_HREF: https://api.vk.com
-      ZAMMAD_TOKEN: token
-      ZAMMAD_HREF: href
-      WEBHOOK_SECRET_KEY: secret
+      ZAMMAD_TOKEN: ZAMMAD_TOKEN # change
+      ZAMMAD_HREF: https://zammad.ru/ # change
+      WEBHOOK_SECRET_KEY: WEBHOOK_SECRET_KEY # change
       WEBHOOK_PORT: :8181
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_HOST: postgres # postgres container_name
-      POSTGRES_PASS: password
+      POSTGRES_HOST: postgres
+      POSTGRES_PASS: POSTGRES_PASS # change
+      ZAMMAD_OAUTH_CLIENT_ID: ZAMMAD_OAUTH_CLIENT_ID # change
+      ZAMMAD_OAUTH_CLIENT_SECRET: ZAMMAD_OAUTH_CLIENT_SECRET # change
+      ZAMMAD_OAUTH_REDIRECT_URL: https://example.ru:8181/zammad/auth # change
+      ZAMMAD_OAUTH_AUTH_URL: https://zammad.ru/oauth/authorize # change
+      ZAMMAD_OAUTH_TOKEN_URL: https://zammad.ru/oauth/token # change
     depends_on:
       - postgres
     restart: always

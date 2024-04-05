@@ -11,12 +11,13 @@ import (
 	longpoll2 "github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/longpoll"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/operation"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot/webhook"
+	"github.com/chazari-x/hmtpk_zammad_vk_bot/security"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/storage"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad"
 	log "github.com/sirupsen/logrus"
 )
 
-func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.DB) (err error) {
+func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.DB, sec *security.Security) (err error) {
 	vk := api.NewVK(cfg.Token)
 
 	group, err := vk.GroupsGetByID(nil)
@@ -34,7 +35,7 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 
 	go func() {
 		log.Info("Запуск WebHook'а")
-		if err = webhook.NewWebHook(cfg.WebHook, vk, db, kbrd).Start(); err != nil {
+		if err = webhook.NewWebHook(cfg.WebHook, vk, db, kbrd, z, cfg, sec).Start(); err != nil {
 			if _, ok := <-errCh; ok {
 				errCh <- err
 				return
@@ -49,7 +50,8 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 
 	go func() {
 		log.Info("Запуск LongPoll'а")
-		longpoll2.NewLongPoll(lp, vk, operation.NewOperationExecutor(vk, z, kbrd, s, db)).MessageEvent().MessageNew()
+		oex := operation.NewOperationExecutor(vk, z, kbrd, s, db, cfg.WebHook.OAuth, sec)
+		longpoll2.NewLongPoll(lp, vk, oex).MessageEvent().MessageNew()
 
 		if err = lp.Run(); err != nil {
 			if _, ok := <-errCh; ok {

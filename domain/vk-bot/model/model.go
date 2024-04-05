@@ -34,6 +34,7 @@ type Action struct {
 	OwnerID string  `json:"owner_id,omitempty"`
 	Hash    string  `json:"hash,omitempty"`
 	Label   string  `json:"label,omitempty"`
+	Link    string  `json:"link,omitempty"`
 	Payload Payload `json:"payload,omitempty"`
 }
 
@@ -67,10 +68,8 @@ type Command string
 
 const (
 	Authorization Command = "Начать"
-	Password      Command = "Пароль"
-	CancelAuth    Command = "Отмена авторизации"
+	Connect       Command = "Связать"
 	DeleteAuth    Command = "Выйти из системы"
-	ErrorAuth     Command = "Ошибка авторизации"
 
 	Home         Command = "На главную"
 	MyTickets    Command = "Мои обращения"
@@ -79,17 +78,18 @@ const (
 	ChangeTitle      Command = "Заголовок"
 	ChangeBody       Command = "Описание"
 	ChangeGroup      Command = "Группа"
-	ChangePriority   Command = "Приоритет"
 	ChangeDepartment Command = "Отдел"
 	ChangeSubject    Command = "Тема"
 	ChangeOwner      Command = "Ответственный"
-	//ChangeType       Command = "Тип"
+	ChangePriority   Command = "Приоритет"
+	ChangeType       Command = "Тип"
 
 	SendMessage Command = "Отправить ответ"
 
-	Cancel Command = "Отмена"
-	Delete Command = "Удалить"
-	Send   Command = "Отправить"
+	Cancel     Command = "Отмена"
+	CancelSend Command = "Отмена отправки"
+	Delete     Command = "Удалить"
+	Send       Command = "Отправить"
 )
 
 func (c Command) String() string {
@@ -104,6 +104,10 @@ func (c Command) Key() string {
 	switch c {
 	case SendMessage:
 		return "SendMessage"
+	case CancelSend:
+		return "CancelSend"
+	case Connect:
+		return "Connect"
 	case MyTickets:
 		return "MyTickets"
 	case Home:
@@ -114,22 +118,16 @@ func (c Command) Key() string {
 		return "DeleteAuth"
 	case Delete:
 		return "Delete"
-	case CancelAuth:
-		return "CancelAuth"
 	case Cancel:
 		return "Cancel"
-	case ErrorAuth:
-		return "ErrorAuth"
-	case Password:
-		return "Password"
 	case ChangeOwner:
 		return "ChangeOwner"
 	case ChangeDepartment:
 		return "ChangeDepartment"
 	case Send:
 		return "Send"
-	case ChangePriority:
-		return "ChangePriority"
+	//case ChangePriority:
+	//	return "ChangePriority"
 	case ChangeBody:
 		return "ChangeBody"
 	case ChangeTitle:
@@ -157,39 +155,25 @@ func (c Command) Value() string {
 func (c Command) Message() string {
 	switch c {
 	case Authorization:
-		return `ℹ Здравствуйте! Для продолжения работы с ботом требуется ввести ваш логин и пароль, используемые для системы Zammad.
-
-ℹ Сейчас введите логин:`
+		return `ℹ Для продолжения работы с ботом требуется связать VK с системой Zammad. Для этого нажмите на кнопку "связать", затем нажмите кнопку "начать": `
 	case Home:
 		return `ℹ При возникновении обращения просто напишите его мне (максимум 500 символов).`
-	case Password:
-		return `ℹ Теперь введите пароль:`
 	case DeleteAuth:
-		return `ℹ Вы вышли из системы! Для продолжения работы с ботом требуется ввести ваш логин и пароль, используемые для системы Zammad.
-
-ℹ Сейчас введите логин:`
-	case CancelAuth:
-		return `ℹ Вы отменили авторизацию! Для продолжения работы с ботом требуется ввести ваш логин и пароль, используемые для системы Zammad.
-
-ℹ Сейчас введите логин:`
-	case ErrorAuth:
-		return `🚫 Вы ввели неверный логин или пароль, повторите попытку! Повторите попытку!
-
-ℹ Сейчас введите логин:`
+		return `ℹ Вы вышли из системы! Для продолжения работы с ботом требуется связать VK с системой Zammad. Для этого нажмите на кнопку "связать", затем нажмите кнопку "начать": `
 	case MyTickets:
 		return "ℹ Ваши обращения:"
 	case CreateTicket, Cancel:
 		return "📄 Ваше обращение 📄\n"
 	case ChangeTitle:
-		return "➕ Введите заголовок (максимум 50 символов):\n"
+		return "➕ Введите заголовок (максимум 100 символов):\n"
 	case ChangeBody:
 		return "➕ Введите описание (максимум 500 символов):\n"
 	case ChangeGroup:
 		return "➕ Выберите группу:\n"
 	//case ChangeType:
 	//	return "➕ Выберите тип:\n"
-	case ChangePriority:
-		return "➕ Выберите приоритет:\n"
+	//case ChangePriority:
+	//	return "➕ Выберите приоритет:\n"
 	case ChangeDepartment:
 		return "➕ Выберите отдел:\n"
 	case ChangeSubject:
@@ -197,12 +181,20 @@ func (c Command) Message() string {
 	case ChangeOwner:
 		return "➕ Выберите ответственного:\n"
 	case SendMessage:
-		return "➕ Введите ваше сообщение (максимум 500 символов):\n"
+		return "➕ Введите ваше сообщение:\n"
 	case Send:
 		return Send.String()
 	default:
 		return ""
 	}
+}
+
+type Data struct {
+	WhMsg   WebHookMessage
+	Title   string
+	Message string
+	Kbrd    []byte
+	Vk      int
 }
 
 type WebHookMessage struct {

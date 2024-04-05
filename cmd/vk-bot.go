@@ -3,6 +3,7 @@ package cmd
 import (
 	database "github.com/chazari-x/hmtpk_zammad_vk_bot/db"
 	vkbot "github.com/chazari-x/hmtpk_zammad_vk_bot/domain/vk-bot"
+	"github.com/chazari-x/hmtpk_zammad_vk_bot/security"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/storage"
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/zammad"
 	log "github.com/sirupsen/logrus"
@@ -38,7 +39,7 @@ func init() {
 
 			log.Info("Запуск бота для Zammad...")
 			defer log.Info("Бот для Zammad остановлен.")
-			if err = vkbot.Start(cfg.VKBot, z, s, db); err != nil {
+			if err = vkbot.Start(cfg.VKBot, z, s, db, security.NewSecurity(cfg.Security)); err != nil {
 				log.Fatalf("Ошибка: %v\n", err)
 			}
 		},

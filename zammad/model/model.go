@@ -29,17 +29,18 @@ type Group struct {
 }
 
 type User struct {
-	ID         int                 `json:"id"`
-	Firstname  string              `json:"firstname"`
-	Lastname   string              `json:"lastname"`
-	Email      string              `json:"email"`
-	Department string              `json:"department"`
-	Active     bool                `json:"active"`
-	RoleIds    []int               `json:"role_ids"`
-	GroupIds   map[string][]string `json:"group_ids"`
+	ID          int                 `json:"id"`
+	Firstname   string              `json:"firstname"`
+	Lastname    string              `json:"lastname"`
+	Email       string              `json:"email"`
+	Department  string              `json:"department"`
+	Active      bool                `json:"active"`
+	RoleIds     []int               `json:"role_ids"`
+	GroupIds    map[string][]string `json:"group_ids"`
+	DisplayName string              `json:"displayname"`
 }
 
-type TicketCreate struct {
+type Ticket struct {
 	ArticleCount          int       `json:"article_count"`
 	ArticleIds            []int     `json:"article_ids"`
 	CreateArticleSenderID int       `json:"create_article_sender_id"`
@@ -59,7 +60,7 @@ type TicketCreate struct {
 	UpdatedByID           int       `json:"updated_by_id"`
 }
 
-type Ticket struct {
+type BotTicket struct {
 	ID         int     `json:"id"`
 	Title      string  `json:"title"`
 	Group      Group   `json:"group"`
@@ -130,7 +131,7 @@ func (t TicketArticleCreate) Interface() (*map[string]interface{}, error) {
 
 const p = "\n# %s%s\n"
 
-func (t Ticket) String() (result string) {
+func (t BotTicket) String() (result string) {
 	if t.Title != "" {
 		result += fmt.Sprintf(p, "Заголовок: ", t.Title)
 	}
@@ -156,7 +157,7 @@ func (t Ticket) String() (result string) {
 	return
 }
 
-func (t Ticket) Interface() (*map[string]interface{}, error) {
+func (t BotTicket) Interface() (*map[string]interface{}, error) {
 	if t.Title == "" {
 		return nil, TitleIsNil
 	}

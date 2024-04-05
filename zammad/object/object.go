@@ -17,20 +17,20 @@ func NewObjectController(client *zammad.Client) *Object {
 }
 
 func (o *Object) List() (Objects []model.Object, err error) {
-	list, err := o.client.ObjectList()
+	data, err := o.client.ObjectList()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	listBytes, err := json.Marshal(*list)
+	bytes, err := json.Marshal(*data)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
 	var allObjects []model.Object
-	if err = json.Unmarshal(listBytes, &allObjects); err != nil {
+	if err = json.Unmarshal(bytes, &allObjects); err != nil {
 		log.Error(err)
 		return
 	}

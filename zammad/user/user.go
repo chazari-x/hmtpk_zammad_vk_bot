@@ -2,8 +2,6 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
-	mail2 "net/mail"
 	"slices"
 	"strconv"
 
@@ -22,8 +20,8 @@ func NewUserController(zammad *zammad.Client, client *client.Client) *User {
 	return &User{zammad: zammad, client: client}
 }
 
-func (u *User) Me(user, pass string) (User model.User, err error) {
-	newZammad, err := u.client.NewClient(user, pass)
+func (u *User) Me(token string) (User model.User, err error) {
+	newZammad, err := u.client.NewClient(token)
 	if err != nil {
 		log.Error(err)
 		return
@@ -74,39 +72,6 @@ func (u *User) ListByDepartment(department string, group int) (Users []model.Use
 	}
 
 	return
-}
-
-func (u *User) ValidateEmail(emails string) (err error) {
-	if _, err = mail2.ParseAddress(emails); err != nil {
-		log.Error(err)
-		return
-	}
-
-	data, err := u.zammad.UserList()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	var allUsers []model.User
-	if err = json.Unmarshal(bytes, &allUsers); err != nil {
-		log.Error(err)
-		return
-	}
-
-	for _, user := range allUsers {
-		if user.Active && user.Email == emails {
-			return
-		}
-	}
-
-	return errors.New("not found")
 }
 
 func (u *User) Departments(group int) (departments []string, err error) {

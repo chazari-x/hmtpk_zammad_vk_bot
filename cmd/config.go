@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	VKBot  config.VKBot    `yaml:"vk-bot"`
-	Zammad config.Zammad   `yaml:"zammad"`
-	Redis  config.Redis    `yaml:"redis"`
-	DB     config.DataBase `yaml:"db"`
+	VKBot    config.VKBot
+	Zammad   config.Zammad
+	Redis    config.Redis
+	DB       config.DataBase
+	Security config.Security
 }
 
 func parseConfig(_ *cobra.Command) Config {
@@ -30,12 +31,19 @@ func parseConfig(_ *cobra.Command) Config {
 	log.SetLevel(log.TraceLevel)
 
 	cfg.VKBot.Token = os.Getenv("VK_TOKEN")
-	cfg.VKBot.Api.Href = os.Getenv("VK_API_HREF")
+	cfg.VKBot.Href = os.Getenv("VK_API_HREF")
+	cfg.VKBot.Chat = os.Getenv("VK_CHAT_HREF")
 	cfg.Zammad.Token = os.Getenv("ZAMMAD_TOKEN")
 	cfg.Zammad.Url = os.Getenv("ZAMMAD_HREF")
-	cfg.VKBot.WebHook.SecretKey = os.Getenv("WEBHOOK_SECRET_KEY")
+
+	cfg.Security.SecretKey = os.Getenv("WEBHOOK_SECRET_KEY")
 	cfg.VKBot.WebHook.Port = os.Getenv("WEBHOOK_PORT")
-	cfg.VKBot.Api.SecretKey = os.Getenv("POSTGRES_DB_SECRET_KEY")
+	cfg.VKBot.WebHook.OAuth.ClientID = os.Getenv("ZAMMAD_OAUTH_CLIENT_ID")
+	cfg.VKBot.WebHook.OAuth.ClientSecret = os.Getenv("ZAMMAD_OAUTH_CLIENT_SECRET")
+	cfg.VKBot.WebHook.OAuth.RedirectURL = os.Getenv("ZAMMAD_OAUTH_REDIRECT_URL")
+	cfg.VKBot.WebHook.OAuth.AuthURL = os.Getenv("ZAMMAD_OAUTH_AUTH_URL")
+	cfg.VKBot.WebHook.OAuth.TokenURL = os.Getenv("ZAMMAD_OAUTH_TOKEN_URL")
+
 	cfg.DB.Name = os.Getenv("POSTGRES_DB")
 	cfg.DB.User = os.Getenv("POSTGRES_USER")
 	cfg.DB.Port = os.Getenv("POSTGRES_PORT")
