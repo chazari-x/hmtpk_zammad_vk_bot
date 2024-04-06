@@ -25,6 +25,8 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 		return
 	}
 
+	cfg.Name = group[0].Name
+
 	lp, err := longpoll.NewLongPoll(vk, group[0].ID)
 	if err != nil {
 		return

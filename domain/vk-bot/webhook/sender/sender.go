@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/SevereCloud/vksdk/v2/api"
@@ -28,6 +27,32 @@ type Sender struct {
 
 func NewSender(vk *api.VK, db *database.DB, kbrd *keyboard.Keyboard, vkCfg config.VKBot) *Sender {
 	return &Sender{vk: vk, db: db, kbrd: kbrd, vkCfg: vkCfg}
+}
+
+func (s *Sender) Auth(PeerID int) {
+	kbrd, err := s.kbrd.GetKeyboard(model.Home, keyboard.Data{})
+	if err != nil {
+		return
+	}
+
+	payload, err := json.Marshal(zammadModel.BotTicket{})
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	var b = params.NewMessagesSendBuilder()
+	b.Payload(string(payload))
+	b.Keyboard(string(kbrd))
+	b.Message(model.Home.Message())
+	b.RandomID(int(time.Now().Unix()))
+	b.PeerID(PeerID)
+	b.TestMode(true)
+
+	if _, err = s.vk.MessagesSend(b.Params); err != nil {
+		log.Error(err)
+	}
+	return
 }
 
 func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
@@ -80,16 +105,6 @@ func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
 		b.Keyboard(string(data.Kbrd))
 	}
 
-	marshal, err := json.Marshal(zammadModel.BotTicket{
-		Customer: strconv.Itoa(data.WhMsg.Ticket.CustomerID),
-		ID:       data.WhMsg.Ticket.ID,
-	})
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	b.Payload(string(marshal))
 	b.Message(data.Message)
 	b.RandomID(int(time.Now().Unix()))
 	b.PeerID(data.Vk)

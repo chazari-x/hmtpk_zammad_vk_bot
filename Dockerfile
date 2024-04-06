@@ -18,7 +18,6 @@ COPY --from=builder /app/main /app/
 
 COPY domain/vk-bot/webhook/files/error.html files/error.html
 COPY domain/vk-bot/webhook/files/success.html files/success.html
-COPY domain/vk-bot/webhook/files/favicon.png files/favicon.png
 RUN chown zammad-vk-bot:zammad-vk-bot /app
 RUN chmod +x /app
 

@@ -20,15 +20,16 @@ import (
 )
 
 type Handler struct {
-	cfg config.WebHook
-	s   *sender.Sender
-	z   *zammad.Zammad
-	db  *database.DB
-	sec *security.Security
+	vkCfg config.VKBot
+	cfg   config.WebHook
+	s     *sender.Sender
+	z     *zammad.Zammad
+	db    *database.DB
+	sec   *security.Security
 }
 
-func NewHandler(cfg config.WebHook, s *sender.Sender, z *zammad.Zammad, db *database.DB, sec *security.Security) *Handler {
-	return &Handler{cfg: cfg, s: s, z: z, db: db, sec: sec}
+func NewHandler(cfg config.WebHook, s *sender.Sender, z *zammad.Zammad, db *database.DB, sec *security.Security, vkCfg config.VKBot) *Handler {
+	return &Handler{cfg: cfg, s: s, z: z, db: db, sec: sec, vkCfg: vkCfg}
 }
 
 // WebhookHandler - обработчик вебхука
@@ -78,41 +79,41 @@ func (wh *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 func (wh *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 	userSign := r.FormValue("user_sign")
 	if userSign == "" {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	elements := strings.Split(userSign, "_")
 	if len(elements) != 2 {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	userID := elements[0]
 	if userID == "" {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	id, err := strconv.Atoi(userID)
 	if err != nil {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	if id == 0 {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	sign := elements[1]
 	if sign == "" {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	if sign != wh.sec.CreateHmacSignature([]byte(userID)) {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
@@ -134,32 +135,34 @@ func (wh *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	token, err := zammadOAuthConfig.Exchange(r.Context(), code)
 	if err != nil {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	if token == nil {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	if !token.Valid() {
-		sendErrorPage(w, r, http.StatusBadRequest)
+		wh.sendErrorPage(w, r, http.StatusBadRequest)
 		return
 	}
 
 	me, err := wh.z.User.Me(token.AccessToken)
 	if err != nil {
 		log.Error(err)
-		sendErrorPage(w, r, http.StatusInternalServerError)
+		wh.sendErrorPage(w, r, http.StatusInternalServerError)
 		return
 	}
 
 	if err = wh.db.InsertUser(id, me.ID); err != nil {
 		log.Error(err)
-		sendErrorPage(w, r, http.StatusInternalServerError)
+		wh.sendErrorPage(w, r, http.StatusInternalServerError)
 		return
 	}
+
+	go wh.s.Auth(id)
 
 	t, err := template.ParseFiles("files/success.html")
 	if err != nil {
@@ -167,21 +170,27 @@ func (wh *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-	if err = t.Execute(w, nil); err != nil {
-		http.ServeFile(w, r, "files/success.html")
+	if err = t.Execute(w, &struct {
+		Name string
+		URL  string
+	}{URL: wh.vkCfg.Chat, Name: wh.vkCfg.Name}); err != nil {
+		_, _ = w.Write([]byte(http.StatusText(http.StatusAccepted)))
 		return
 	}
 }
 
-func sendErrorPage(w http.ResponseWriter, r *http.Request, status int) {
+func (wh *Handler) sendErrorPage(w http.ResponseWriter, _ *http.Request, status int) {
+	w.WriteHeader(status)
 	t, err := template.ParseFiles("files/error.html")
 	if err != nil {
-		http.ServeFile(w, r, "files/error.html")
+		http.Error(w, http.StatusText(status), status)
 		return
 	}
-	w.WriteHeader(status)
-	if err = t.Execute(w, nil); err != nil {
-		http.ServeFile(w, r, "files/error.html")
+	if err = t.Execute(w, &struct {
+		Name string
+		URL  string
+	}{URL: wh.vkCfg.Chat, Name: wh.vkCfg.Name}); err != nil {
+		http.Error(w, http.StatusText(status), status)
 		return
 	}
 }

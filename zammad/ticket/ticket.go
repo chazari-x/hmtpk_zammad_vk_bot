@@ -97,8 +97,29 @@ func (t *Ticket) TicketById(id string) (Ticket model.BotTicket, err error) {
 		return
 	}
 
+	data, err = t.client.TicketStateShow(ticket.StateID)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	bytes, err = json.Marshal(*data)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	var state struct {
+		Name string `json:"name"`
+	}
+	if err = json.Unmarshal(bytes, &state); err != nil {
+		log.Error(err)
+		return
+	}
+
 	Ticket = model.BotTicket{
 		ID:         ticket.ID,
+		Number:     ticket.Number,
 		Title:      ticket.Title,
 		Group:      group,
 		Customer:   strconv.Itoa(ticket.CustomerID),
@@ -110,10 +131,15 @@ func (t *Ticket) TicketById(id string) (Ticket model.BotTicket, err error) {
 					return owner.DisplayName
 				}
 
+				if owner.Firstname == "-" {
+					return ""
+				}
+
 				return fmt.Sprintf("%s %s", owner.Firstname, owner.Lastname)
 			}(),
 			ID: strconv.Itoa(owner.ID),
 		},
+		Status: state.Name,
 	}
 
 	return

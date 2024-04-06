@@ -20,16 +20,13 @@ type WebHook struct {
 }
 
 func NewWebHook(cfg config.WebHook, vk *api.VK, db *database.DB, kbrd *keyboard.Keyboard, z *zammad.Zammad, vkCfg config.VKBot, sec *security.Security) *WebHook {
-	return &WebHook{cfg: cfg, h: handler.NewHandler(cfg, sender.NewSender(vk, db, kbrd, vkCfg), z, db, sec)}
+	return &WebHook{cfg: cfg, h: handler.NewHandler(cfg, sender.NewSender(vk, db, kbrd, vkCfg), z, db, sec, vkCfg)}
 }
 
 func (wh *WebHook) Start() error {
 	// Регистрируем обработчик вебхука
 	http.HandleFunc("/zammad/webhook", wh.h.WebhookHandler)
 	http.HandleFunc("/zammad/auth", wh.h.AuthHandler)
-	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "files/favicon.ico")
-	})
 
 	// Запускаем сервер на порту
 	log.Infof("WebHook запущен на порту: %s", wh.cfg.Port)

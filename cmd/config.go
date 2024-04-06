@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 
 	"github.com/chazari-x/hmtpk_zammad_vk_bot/config"
@@ -11,14 +12,11 @@ import (
 type Config struct {
 	VKBot    config.VKBot
 	Zammad   config.Zammad
-	Redis    config.Redis
 	DB       config.DataBase
 	Security config.Security
 }
 
-func parseConfig(_ *cobra.Command) Config {
-	var cfg Config
-
+func parseConfig(_ *cobra.Command) (cfg Config, err error) {
 	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{
 		ForceColors:               true,
@@ -28,27 +26,96 @@ func parseConfig(_ *cobra.Command) Config {
 		TimestampFormat:           "2006-01-02 15:04:05",
 		PadLevelText:              true,
 	})
-	log.SetLevel(log.TraceLevel)
 
-	cfg.VKBot.Token = os.Getenv("VK_TOKEN")
-	cfg.VKBot.Href = os.Getenv("VK_API_HREF")
-	cfg.VKBot.Chat = os.Getenv("VK_CHAT_HREF")
-	cfg.Zammad.Token = os.Getenv("ZAMMAD_TOKEN")
-	cfg.Zammad.Url = os.Getenv("ZAMMAD_HREF")
+	if logLevel := os.Getenv("BOT_LOG_LEVEL"); logLevel != "" {
+		var level log.Level
+		if level, err = log.ParseLevel(logLevel); err != nil {
+			return
+		}
+		log.SetLevel(level)
+	}
 
-	cfg.Security.SecretKey = os.Getenv("WEBHOOK_SECRET_KEY")
-	cfg.VKBot.WebHook.Port = os.Getenv("WEBHOOK_PORT")
-	cfg.VKBot.WebHook.OAuth.ClientID = os.Getenv("ZAMMAD_OAUTH_CLIENT_ID")
-	cfg.VKBot.WebHook.OAuth.ClientSecret = os.Getenv("ZAMMAD_OAUTH_CLIENT_SECRET")
-	cfg.VKBot.WebHook.OAuth.RedirectURL = os.Getenv("ZAMMAD_OAUTH_REDIRECT_URL")
-	cfg.VKBot.WebHook.OAuth.AuthURL = os.Getenv("ZAMMAD_OAUTH_AUTH_URL")
-	cfg.VKBot.WebHook.OAuth.TokenURL = os.Getenv("ZAMMAD_OAUTH_TOKEN_URL")
+	if cfg.VKBot.Token = os.Getenv("BOT_VK_TOKEN"); cfg.VKBot.Token == "" {
+		err = errors.New("BOT_VK_TOKEN is nil")
+		return
+	}
 
-	cfg.DB.Name = os.Getenv("POSTGRES_DB")
-	cfg.DB.User = os.Getenv("POSTGRES_USER")
-	cfg.DB.Port = os.Getenv("POSTGRES_PORT")
-	cfg.DB.Host = os.Getenv("POSTGRES_HOST")
-	cfg.DB.Pass = os.Getenv("POSTGRES_PASS")
+	if cfg.VKBot.Href = os.Getenv("BOT_VK_API_HREF"); cfg.VKBot.Href == "" {
+		err = errors.New("BOT_VK_API_HREF is nil")
+		return
+	}
 
-	return cfg
+	if cfg.VKBot.Chat = os.Getenv("BOT_VK_CHAT_HREF"); cfg.VKBot.Chat == "" {
+		err = errors.New("BOT_VK_CHAT_HREF is nil")
+		return
+	}
+
+	cfg.Security.SecretKey = os.Getenv("BOT_WEBHOOK_SECRET_KEY")
+
+	if cfg.VKBot.WebHook.Port = os.Getenv("BOT_WEBHOOK_PORT"); cfg.VKBot.WebHook.Port == "" {
+		err = errors.New("BOT_WEBHOOK_PORT is nil")
+		return
+	}
+
+	if cfg.Zammad.Token = os.Getenv("BOT_ZAMMAD_TOKEN"); cfg.Zammad.Token == "" {
+		err = errors.New("BOT_ZAMMAD_TOKEN is nil")
+		return
+	}
+
+	if cfg.Zammad.Url = os.Getenv("BOT_ZAMMAD_HREF"); cfg.Zammad.Url == "" {
+		err = errors.New("BOT_ZAMMAD_HREF is nil")
+		return
+	}
+
+	if cfg.VKBot.WebHook.OAuth.ClientID = os.Getenv("BOT_ZAMMAD_OAUTH_CLIENT_ID"); cfg.VKBot.WebHook.OAuth.ClientID == "" {
+		err = errors.New("BOT_ZAMMAD_OAUTH_CLIENT_ID is nil")
+		return
+	}
+
+	if cfg.VKBot.WebHook.OAuth.ClientSecret = os.Getenv("BOT_ZAMMAD_OAUTH_CLIENT_SECRET"); cfg.VKBot.WebHook.OAuth.ClientSecret == "" {
+		err = errors.New("BOT_ZAMMAD_OAUTH_CLIENT_SECRET is nil")
+		return
+	}
+
+	if cfg.VKBot.WebHook.OAuth.RedirectURL = os.Getenv("BOT_ZAMMAD_OAUTH_REDIRECT_URL"); cfg.VKBot.WebHook.OAuth.RedirectURL == "" {
+		err = errors.New("BOT_ZAMMAD_OAUTH_REDIRECT_URL is nil")
+		return
+	}
+
+	if cfg.VKBot.WebHook.OAuth.AuthURL = os.Getenv("BOT_ZAMMAD_OAUTH_AUTH_URL"); cfg.VKBot.WebHook.OAuth.AuthURL == "" {
+		err = errors.New("BOT_ZAMMAD_OAUTH_AUTH_URL is nil")
+		return
+	}
+
+	if cfg.VKBot.WebHook.OAuth.TokenURL = os.Getenv("BOT_ZAMMAD_OAUTH_TOKEN_URL"); cfg.VKBot.WebHook.OAuth.TokenURL == "" {
+		err = errors.New("BOT_ZAMMAD_OAUTH_TOKEN_URL is nil")
+		return
+	}
+
+	if cfg.DB.Name = os.Getenv("POSTGRES_DB"); cfg.DB.Name == "" {
+		err = errors.New("POSTGRES_DB is nil")
+		return
+	}
+
+	if cfg.DB.User = os.Getenv("POSTGRES_USER"); cfg.DB.User == "" {
+		err = errors.New("POSTGRES_USER is nil")
+		return
+	}
+
+	if cfg.DB.Port = os.Getenv("POSTGRES_PORT"); cfg.DB.Port == "" {
+		err = errors.New("POSTGRES_PORT is nil")
+		return
+	}
+
+	if cfg.DB.Host = os.Getenv("POSTGRES_HOST"); cfg.DB.Host == "" {
+		err = errors.New("POSTGRES_HOST is nil")
+		return
+	}
+
+	if cfg.DB.Pass = os.Getenv("POSTGRES_PASS"); cfg.DB.Pass == "" {
+		err = errors.New("POSTGRES_PASS is nil")
+		return
+	}
+
+	return
 }

@@ -1,6 +1,7 @@
 package config
 
 type VKBot struct {
+	Name    string
 	Token   string
 	Href    string
 	Chat    string
@@ -27,12 +28,6 @@ type OAuth struct {
 type Zammad struct {
 	Token string
 	Url   string
-}
-
-type Redis struct {
-	Host string
-	Port string
-	Pass string
 }
 
 type DataBase struct {
