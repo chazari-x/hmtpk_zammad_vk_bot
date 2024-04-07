@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 )
 
 const (
-	bucketName = "zammad_vk"
+	bucketName = "users"
 )
 
 type DB struct {
@@ -41,7 +40,11 @@ func (s *DB) InsertUser(vk, zammad int) (err error) {
 	err = s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New("bucket not found")
+			return bolt.ErrBucketNotFound
+		}
+
+		if err = b.Delete([]byte(strconv.Itoa(vk))); err != nil {
+			return err
 		}
 
 		return b.Put([]byte(strconv.Itoa(vk)), []byte(strconv.Itoa(zammad)))
@@ -58,7 +61,7 @@ func (s *DB) DeleteUser(vk int) (err error) {
 	err = s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New("bucket not found")
+			return bolt.ErrBucketNotFound
 		}
 
 		return b.Delete([]byte(strconv.Itoa(vk)))
@@ -75,20 +78,21 @@ func (s *DB) SelectZammad(vk int) (zammad int, err error) {
 	err = s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New("bucket not found")
+			return bolt.ErrBucketNotFound
 		}
 
 		if v := b.Get([]byte(strconv.Itoa(vk))); v != nil {
-			vk, _ = strconv.Atoi(string(v))
+			zammad, err = strconv.Atoi(string(v))
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
 	})
 
-	if err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
+	if err != nil {
 		log.Error(err)
-	} else {
-		err = nil
 	}
 
 	return
@@ -98,24 +102,24 @@ func (s *DB) SelectVK(zammad int) (vk int, err error) {
 	err = s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New("bucket not found")
+			return bolt.ErrBucketNotFound
 		}
 
 		c := b.Cursor()
 		for key, value := c.First(); key != nil; key, value = c.Next() {
 			if string(value) == strconv.Itoa(zammad) {
-				vk, _ = strconv.Atoi(string(key))
-				return nil
+				vk, err = strconv.Atoi(string(key))
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		return nil
 	})
 
-	if err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
+	if err != nil {
 		log.Error(err)
-	} else {
-		err = nil
 	}
 
 	return

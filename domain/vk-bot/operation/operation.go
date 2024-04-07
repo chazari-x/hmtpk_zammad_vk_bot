@@ -1,7 +1,6 @@
 package operation
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,7 +83,7 @@ func (o *Operation) ExecuteOperation(msg model.Message) (err error) {
 	// получение zammad user id из базы данных; если customer from ticket != zammad user id, то удалить ticket
 	{
 		customer := data.ticket.Customer
-		if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if data.customer, err = o.db.SelectZammad(msg.PeerID); err != nil {
 			return
 		}
 		data.ticket.Customer = strconv.Itoa(data.customer)
