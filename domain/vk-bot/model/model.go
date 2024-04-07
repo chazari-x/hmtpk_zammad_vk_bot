@@ -59,10 +59,7 @@ type Message struct {
 	ID             int           `json:"-"`
 }
 
-const (
-	Status = "status"
-	User   = "login"
-)
+const Status = "status"
 
 type Command string
 
@@ -155,11 +152,11 @@ func (c Command) Value() string {
 func (c Command) Message() string {
 	switch c {
 	case Authorization:
-		return `ℹ Для продолжения работы с ботом требуется связать VK с системой Zammad. Для этого нажмите на кнопку "связать", затем нажмите кнопку "начать": `
+		return `ℹ Для продолжения работы с ботом требуется связать VK с системой Zammad. Для этого нажмите на кнопку "Связать", затем нажмите кнопку "Начать".`
 	case Home:
 		return `ℹ При возникновении обращения просто напишите его мне (максимум 500 символов).`
 	case DeleteAuth:
-		return `ℹ Вы вышли из системы! Для продолжения работы с ботом требуется связать VK с системой Zammad. Для этого нажмите на кнопку "связать", затем нажмите кнопку "начать": `
+		return "ℹ Вы вышли из системы! \n" + Authorization.Message()
 	case MyTickets:
 		return "ℹ Ваши обращения:"
 	case CreateTicket, Cancel:

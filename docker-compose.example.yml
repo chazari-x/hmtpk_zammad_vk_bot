@@ -17,6 +17,8 @@ services:
       BOT_ZAMMAD_OAUTH_REDIRECT_URL: https://example.ru:8181/zammad/auth # change
       BOT_ZAMMAD_OAUTH_AUTH_URL: https://zammad.ru/oauth/authorize # change
       BOT_ZAMMAD_OAUTH_TOKEN_URL: https://zammad.ru/oauth/token # change
+    volumes:
+      - ./db_data:/app/db_data
     restart: on-failure
     ports:
       - "8181:8181"

@@ -71,7 +71,12 @@ type BotTicket struct {
 	Owner      Owner   `json:"owner"`
 	Type       Type    `json:"type"`
 	Article    Article `json:"article"`
-	Status     string  `json:"status"`
+	State      State   `json:"state"`
+}
+
+type State struct {
+	Name string `json:"name"`
+	ID   int    `json:"id"`
 }
 
 type Owner struct {
@@ -95,6 +100,10 @@ type TicketArticleCreate struct {
 	ID          int    `json:"id"`
 	Sender      string `json:"sender"`
 	Type        string `json:"type"`
+}
+
+type TicketUpdate struct {
+	State string `json:"state_id"`
 }
 
 type TicketArticle struct {
@@ -131,6 +140,14 @@ func (t TicketArticleCreate) Interface() (*map[string]interface{}, error) {
 	return &ticket, nil
 }
 
+func (t TicketUpdate) Interface() (*map[string]interface{}, error) {
+	ticket := make(map[string]interface{})
+
+	ticket["state_id"] = t.State
+
+	return &ticket, nil
+}
+
 const p = "\n# %s%s\n"
 
 func (t BotTicket) String() (result string) {
@@ -161,8 +178,8 @@ func (t BotTicket) String() (result string) {
 	if t.Owner.Name != "" {
 		result += fmt.Sprintf(p, "Ответственный: ", t.Owner.Name)
 	}
-	if t.Status != "" {
-		result += fmt.Sprintf(p, "Статус: ", t.Status)
+	if t.State.Name != "" {
+		result += fmt.Sprintf(p, "Статус: ", t.State.Name)
 	}
 
 	return

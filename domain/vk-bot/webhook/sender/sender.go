@@ -1,9 +1,7 @@
 package sender
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -69,12 +67,12 @@ func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
 
 	data.Vk, err = s.db.SelectVK(data.WhMsg.Ticket.CustomerID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-
 		log.Error(err)
 		return err
+	}
+
+	if data.Vk == 0 {
+		return
 	}
 
 	var b = params.NewMessagesSendBuilder()
@@ -85,8 +83,8 @@ func (s *Sender) Send(whMsg model.WebHookMessage, trigger string) (err error) {
 		err = s.botChangeGroup(&data)
 	case "botChangeOwner":
 		err = s.botChangeOwner(&data)
-	case "botChangeStatus":
-		err = s.botChangeStatus(&data)
+	case "botChangeState":
+		err = s.botChangeState(&data)
 	case "botChangeTitle":
 		err = s.botChangeTitle(&data)
 	case "botChangePriority":
@@ -183,7 +181,7 @@ func (s *Sender) botChangeOwner(data *model.Data) (err error) {
 	return
 }
 
-func (s *Sender) botChangeStatus(data *model.Data) (err error) {
+func (s *Sender) botChangeState(data *model.Data) (err error) {
 	data.Message = fmt.Sprintf("%sИзменен статус: %s.", data.Title, data.WhMsg.Ticket.State)
 	return
 }

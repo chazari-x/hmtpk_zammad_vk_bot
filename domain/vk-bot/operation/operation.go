@@ -279,7 +279,7 @@ func (o *Operation) cancel(data *Data) (err error) {
 
 func (o *Operation) cancelSend(data *Data) (err error) {
 	data.messageTextTop = "♻ Вы отменили отправку сообщения.\n\n"
-	data.ticket = zammadModel.BotTicket{Customer: data.ticket.Customer}
+	data.ticket = zammadModel.BotTicket{}
 	data.command = model.Home
 	return
 }
@@ -298,7 +298,7 @@ func (o *Operation) delete(data *Data) (err error) {
 }
 
 func (o *Operation) send(data *Data) (err error) {
-	if _, err = o.zammad.Ticket.Create(data.ticket); err != nil {
+	if err = o.zammad.Ticket.Create(data.ticket); err != nil {
 		return err
 	}
 	data.ticket = zammadModel.BotTicket{}
@@ -477,14 +477,13 @@ func (o *Operation) sendMessage(data *Data) (err error) {
 		return
 	}
 
-	ticket := data.ticket
-	ticket.Article.Body = data.msg.Text
-	if _, err = o.zammad.Ticket.SendToTicket(ticket); err != nil {
+	data.ticket.Article.Body = data.msg.Text
+	if err = o.zammad.Ticket.SendToTicket(data.ticket); err != nil {
 		return
 	}
 
 	data.messageTextTop = "✅ Вы отправили сообщение.\n\n"
-	data.ticket.ID = 0
+	data.ticket = zammadModel.BotTicket{}
 	data.command = model.Home
 	return
 }

@@ -18,15 +18,13 @@ type DB struct {
 	ctx context.Context
 }
 
-func NewDB(ctx context.Context) (s *DB, err error) {
-	s = &DB{ctx: ctx}
-	err = s.connect()
-	return
+func NewDB(ctx context.Context) (*DB, error) {
+	s := &DB{ctx: ctx}
+	return s, s.connect()
 }
 
 func (s *DB) connect() (err error) {
-	s.DB, err = bolt.Open("users.db", 0600, &bolt.Options{Timeout: 2 * time.Second})
-	if err != nil {
+	if s.DB, err = bolt.Open("./db_data/users.db", 0600, &bolt.Options{Timeout: 2 * time.Second}); err != nil {
 		return
 	}
 
@@ -53,7 +51,6 @@ func (s *DB) InsertUser(vk, zammad int) (err error) {
 	if err != nil {
 		log.Error(err)
 	}
-
 	return
 }
 
@@ -70,7 +67,6 @@ func (s *DB) DeleteUser(vk int) (err error) {
 	if err != nil {
 		log.Error(err)
 	}
-
 	return
 }
 
@@ -81,10 +77,11 @@ func (s *DB) SelectZammad(vk int) (zammad int, err error) {
 			return bolt.ErrBucketNotFound
 		}
 
-		if v := b.Get([]byte(strconv.Itoa(vk))); v != nil {
-			zammad, err = strconv.Atoi(string(v))
+		if value := b.Get([]byte(strconv.Itoa(vk))); value != nil {
+			zammad, err = strconv.Atoi(string(value))
 			if err != nil {
-				return err
+				err = nil
+				_ = b.Delete([]byte(strconv.Itoa(vk)))
 			}
 		}
 
@@ -94,7 +91,6 @@ func (s *DB) SelectZammad(vk int) (zammad int, err error) {
 	if err != nil {
 		log.Error(err)
 	}
-
 	return
 }
 
@@ -110,7 +106,8 @@ func (s *DB) SelectVK(zammad int) (vk int, err error) {
 			if string(value) == strconv.Itoa(zammad) {
 				vk, err = strconv.Atoi(string(key))
 				if err != nil {
-					return err
+					err = nil
+					_ = b.Delete(key)
 				}
 			}
 		}
@@ -121,6 +118,5 @@ func (s *DB) SelectVK(zammad int) (vk int, err error) {
 	if err != nil {
 		log.Error(err)
 	}
-
 	return
 }

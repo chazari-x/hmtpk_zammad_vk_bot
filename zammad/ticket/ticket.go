@@ -110,6 +110,7 @@ func (t *Ticket) TicketById(id string) (Ticket model.BotTicket, err error) {
 	}
 
 	var state struct {
+		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
 	if err = json.Unmarshal(bytes, &state); err != nil {
@@ -139,7 +140,10 @@ func (t *Ticket) TicketById(id string) (Ticket model.BotTicket, err error) {
 			}(),
 			ID: strconv.Itoa(owner.ID),
 		},
-		Status: state.Name,
+		State: model.State{
+			Name: state.Name,
+			ID:   state.ID,
+		},
 	}
 
 	return
@@ -187,26 +191,15 @@ func (t *Ticket) PriorityList() (Priorities []model.Priority, err error) {
 	return
 }
 
-func (t *Ticket) Create(ticket model.BotTicket) (TicketCreate model.Ticket, err error) {
+func (t *Ticket) Create(ticket model.BotTicket) (err error) {
 	ticketInterface, err := ticket.Interface()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	data, err := t.client.TicketCreate(ticketInterface)
+	_, err = t.client.TicketCreate(ticketInterface)
 	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	if err = json.Unmarshal(bytes, &TicketCreate); err != nil {
 		log.Error(err)
 		return
 	}
@@ -214,7 +207,7 @@ func (t *Ticket) Create(ticket model.BotTicket) (TicketCreate model.Ticket, err 
 	return
 }
 
-func (t *Ticket) SendToTicket(ticket model.BotTicket) (Article model.TicketArticle, err error) {
+func (t *Ticket) SendToTicket(ticket model.BotTicket) (err error) {
 	var article = model.TicketArticleCreate{
 		Body:     ticket.Article.Body,
 		ID:       ticket.ID,
@@ -227,34 +220,33 @@ func (t *Ticket) SendToTicket(ticket model.BotTicket) (Article model.TicketArtic
 		return
 	}
 
-	data, err := t.client.TicketArticleCreate(ticketInterface)
+	_, err = t.client.TicketArticleCreate(ticketInterface)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	if err = json.Unmarshal(bytes, &Article); err != nil {
-		log.Error(err)
-		return
+	if ticket.State.ID > 2 {
+		if err = t.Update(ticket.ID); err != nil {
+			return
+		}
 	}
 
 	return
 }
 
-func (t *Ticket) Update(ticketID int, ticket model.BotTicket) (update *map[string]interface{}, err error) {
-	ticketInterface, err := ticket.Interface()
+func (t *Ticket) Update(ticketID int) (err error) {
+	var article = model.TicketUpdate{
+		State: "2",
+	}
+
+	ticketInterface, err := article.Interface()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	if update, err = t.client.TicketUpdate(ticketID, ticketInterface); err != nil {
+	if _, err = t.client.TicketUpdate(ticketID, ticketInterface); err != nil {
 		log.Error(err)
 		return
 	}

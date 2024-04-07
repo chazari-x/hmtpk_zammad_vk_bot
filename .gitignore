@@ -2,3 +2,4 @@
 /vendor
 *.yml
 !*example.yml
+/db_data
