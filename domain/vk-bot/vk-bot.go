@@ -36,7 +36,7 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 	errCh := make(chan error)
 
 	go func() {
-		log.Info("Запуск WebHook'а")
+		log.Trace("Запуск WebHook'а")
 		if err = webhook.NewWebHook(cfg.WebHook, vk, db, kbrd, z, cfg, sec).Start(); err != nil {
 			if _, ok := <-errCh; ok {
 				errCh <- err
@@ -51,10 +51,11 @@ func Start(cfg config.VKBot, z *zammad.Zammad, s *storage.Storage, db *database.
 	}()
 
 	go func() {
-		log.Info("Запуск LongPoll'а")
+		log.Trace("Запуск LongPoll'а")
 		oex := operation.NewOperationExecutor(vk, z, kbrd, s, db, cfg.WebHook.OAuth, sec)
 		longpoll2.NewLongPoll(lp, vk, oex).MessageEvent().MessageNew()
 
+		log.Trace("LongPoll запущен.")
 		if err = lp.Run(); err != nil {
 			if _, ok := <-errCh; ok {
 				errCh <- err

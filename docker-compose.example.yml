@@ -1,15 +1,5 @@
 version: '3'
 services:
-  postgres:
-    container_name: postgres
-    image: postgres:latest
-    environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: POSTGRES_PASSWORD # change
-    restart: always
-    ports:
-      - "5432:5432"
   vk-bot:
     container_name: vk-bot
     image: chazari/zammad-vk-bot:latest
@@ -22,17 +12,12 @@ services:
       BOT_WEBHOOK_PORT: :8181
       BOT_ZAMMAD_TOKEN: ZAMMAD_TOKEN # change
       BOT_ZAMMAD_HREF: https://zammad.ru/ # change
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_HOST: postgres
-      POSTGRES_PASS: POSTGRES_PASSWORD # change
       BOT_ZAMMAD_OAUTH_CLIENT_ID: ZAMMAD_OAUTH_CLIENT_ID # change
       BOT_ZAMMAD_OAUTH_CLIENT_SECRET: ZAMMAD_OAUTH_CLIENT_SECRET # change
       BOT_ZAMMAD_OAUTH_REDIRECT_URL: https://example.ru:8181/zammad/auth # change
       BOT_ZAMMAD_OAUTH_AUTH_URL: https://zammad.ru/oauth/authorize # change
       BOT_ZAMMAD_OAUTH_TOKEN_URL: https://zammad.ru/oauth/token # change
-    restart: always
+    restart: on-failure
     ports:
       - "8181:8181"
     command: ["/app/main", "vk-bot"]

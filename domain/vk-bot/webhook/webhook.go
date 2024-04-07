@@ -29,6 +29,6 @@ func (wh *WebHook) Start() error {
 	http.HandleFunc("/zammad/auth", wh.h.AuthHandler)
 
 	// Запускаем сервер на порту
-	log.Infof("WebHook запущен на порту: %s", wh.cfg.Port)
+	log.Tracef("WebHook запущен на порту: %s", wh.cfg.Port)
 	return http.ListenAndServe(wh.cfg.Port, nil)
 }

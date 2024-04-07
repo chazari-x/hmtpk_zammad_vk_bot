@@ -2,71 +2,52 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/chazari-x/hmtpk_zammad_vk_bot/config"
-	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 )
 
 const (
-	selectZammad = `SELECT zammad FROM zammad_vk WHERE vk = $1;`
-	selectVK     = `SELECT vk FROM zammad_vk WHERE zammad = $1;`
-	deleteZammad = `DELETE FROM zammad_vk WHERE zammad = $1;`
-	deleteVK     = `DELETE FROM zammad_vk WHERE vk = $1;`
-	insertUser   = `INSERT INTO zammad_vk (zammad, vk) VALUES ($1, $2) ON CONFLICT (zammad) DO UPDATE SET vk = $2;`
-	createTable  = `CREATE TABLE IF NOT EXISTS zammad_vk (
-	zammad 		INTEGER PRIMARY KEY NOT NULL, 
-	vk 			INTEGER 			NOT NULL
-)`
+	bucketName = "zammad_vk"
 )
 
 type DB struct {
-	DB  *sql.DB
+	DB  *bolt.DB
 	ctx context.Context
 }
 
-func NewDB(cfg config.DataBase, ctx context.Context) (s *DB, err error) {
+func NewDB(ctx context.Context) (s *DB, err error) {
 	s = &DB{ctx: ctx}
-	err = s.connect(cfg)
+	err = s.connect()
 	return
 }
 
-func (s *DB) connect(cfg config.DataBase) (err error) {
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.Name)
-
-	if s.DB, err = sql.Open("postgres", dsn); err != nil {
+func (s *DB) connect() (err error) {
+	s.DB, err = bolt.Open("users.db", 0600, &bolt.Options{Timeout: 2 * time.Second})
+	if err != nil {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second*2)
-	defer cancel()
-
-	if err = s.DB.PingContext(ctx); err != nil {
-		return
-	}
-
-	if _, err = s.DB.ExecContext(ctx, createTable); err != nil {
-		return
-	}
-
-	return
+	return s.DB.Update(func(tx *bolt.Tx) error {
+		_, err = tx.CreateBucketIfNotExists([]byte(bucketName))
+		return err
+	})
 }
 
 func (s *DB) InsertUser(vk, zammad int) (err error) {
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
-	defer cancel()
+	err = s.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketName))
+		if b == nil {
+			return errors.New("bucket not found")
+		}
 
-	if _, err = s.DB.ExecContext(ctx, deleteZammad, zammad); err != nil {
-		log.Error(err)
-		return
-	}
+		return b.Put([]byte(strconv.Itoa(vk)), []byte(strconv.Itoa(zammad)))
+	})
 
-	if _, err = s.DB.ExecContext(ctx, insertUser, zammad, vk); err != nil {
+	if err != nil {
 		log.Error(err)
 	}
 
@@ -74,10 +55,16 @@ func (s *DB) InsertUser(vk, zammad int) (err error) {
 }
 
 func (s *DB) DeleteUser(vk int) (err error) {
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
-	defer cancel()
+	err = s.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketName))
+		if b == nil {
+			return errors.New("bucket not found")
+		}
 
-	if _, err = s.DB.ExecContext(ctx, deleteVK, vk); err != nil {
+		return b.Delete([]byte(strconv.Itoa(vk)))
+	})
+
+	if err != nil {
 		log.Error(err)
 	}
 
@@ -85,22 +72,50 @@ func (s *DB) DeleteUser(vk int) (err error) {
 }
 
 func (s *DB) SelectZammad(vk int) (zammad int, err error) {
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
-	defer cancel()
+	err = s.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketName))
+		if b == nil {
+			return errors.New("bucket not found")
+		}
 
-	if err = s.DB.QueryRowContext(ctx, selectZammad, vk).Scan(&zammad); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if v := b.Get([]byte(strconv.Itoa(vk))); v != nil {
+			vk, _ = strconv.Atoi(string(v))
+		}
+
+		return nil
+	})
+
+	if err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
 		log.Error(err)
+	} else {
+		err = nil
 	}
 
 	return
 }
 
 func (s *DB) SelectVK(zammad int) (vk int, err error) {
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
-	defer cancel()
+	err = s.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketName))
+		if b == nil {
+			return errors.New("bucket not found")
+		}
 
-	if err = s.DB.QueryRowContext(ctx, selectVK, zammad).Scan(&vk); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		c := b.Cursor()
+		for key, value := c.First(); key != nil; key, value = c.Next() {
+			if string(value) == strconv.Itoa(zammad) {
+				vk, _ = strconv.Atoi(string(key))
+				return nil
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
 		log.Error(err)
+	} else {
+		err = nil
 	}
 
 	return

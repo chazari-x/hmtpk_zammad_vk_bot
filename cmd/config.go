@@ -12,7 +12,6 @@ import (
 type Config struct {
 	VKBot    config.VKBot
 	Zammad   config.Zammad
-	DB       config.DataBase
 	Security config.Security
 }
 
@@ -89,31 +88,6 @@ func parseConfig(_ *cobra.Command) (cfg Config, err error) {
 
 	if cfg.VKBot.WebHook.OAuth.TokenURL = os.Getenv("BOT_ZAMMAD_OAUTH_TOKEN_URL"); cfg.VKBot.WebHook.OAuth.TokenURL == "" {
 		err = errors.New("BOT_ZAMMAD_OAUTH_TOKEN_URL is nil")
-		return
-	}
-
-	if cfg.DB.Name = os.Getenv("POSTGRES_DB"); cfg.DB.Name == "" {
-		err = errors.New("POSTGRES_DB is nil")
-		return
-	}
-
-	if cfg.DB.User = os.Getenv("POSTGRES_USER"); cfg.DB.User == "" {
-		err = errors.New("POSTGRES_USER is nil")
-		return
-	}
-
-	if cfg.DB.Port = os.Getenv("POSTGRES_PORT"); cfg.DB.Port == "" {
-		err = errors.New("POSTGRES_PORT is nil")
-		return
-	}
-
-	if cfg.DB.Host = os.Getenv("POSTGRES_HOST"); cfg.DB.Host == "" {
-		err = errors.New("POSTGRES_HOST is nil")
-		return
-	}
-
-	if cfg.DB.Pass = os.Getenv("POSTGRES_PASS"); cfg.DB.Pass == "" {
-		err = errors.New("POSTGRES_PASS is nil")
 		return
 	}
 

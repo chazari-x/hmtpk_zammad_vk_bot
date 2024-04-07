@@ -29,11 +29,3 @@ type Zammad struct {
 	Token string
 	Url   string
 }
-
-type DataBase struct {
-	Host string
-	Port string
-	User string
-	Pass string
-	Name string
-}

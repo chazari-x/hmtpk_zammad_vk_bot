@@ -6,6 +6,12 @@ Zammad VK Bot - это интеграция между платформой об
 написанная на языке программирования Golang. Этот бот предназначен для упрощения взаимодействия пользователей 
 с системой Zammad через VK, обеспечивая более удобный способ отправки запросов и получения поддержки.
 
+## Использование [BoltDB](https://github.com/etcd-io/bbolt)
+
+BoltDB используется в проекте для хранения связи между пользователями VK и их идентификаторами в системе Zammad. Более конкретно, BoltDB хранит пары данных, состоящие из идентификаторов пользователей VK и их соответствующих идентификаторов в системе Zammad.
+
+Использование BoltDB для этой цели обеспечивает быстрый доступ к данным и надежное сохранение информации о связи между пользователями двух платформ. Это позволяет боту эффективно управлять коммуникацией между пользователями VK и системой Zammad.
+
 ## Функциональные возможности
 
 Бот Zammad VK имеет следующие функциональности:
@@ -40,9 +46,9 @@ Zammad VK Bot - это интеграция между платформой об
 
 Для обеспечения безопасного взаимодействия между ботом и Zammad, обязательно настройте аутентификацию OAuth в Zammad. Вот шаги, которые необходимо выполнить для настройки OAuth в Zammad:
 
-#### Настройка клиента OAuth в Zammad 
+#### Настройка клиента OAuth в Zammad (`#system/api`)
 
-Войдите в административный интерфейс Zammad и перейдите в раздел `Настройки` -> `Программный интерфейс приложения (API)` (`#system/api`). Добавьте новое приложение (OAuth Authentication), предоставив необходимую информацию, такую как имя, URL перенаправления (`env BOT_ZAMMAD_OAUTH_REDIRECT_URL`) и т.д.
+Войдите в административный интерфейс Zammad и перейдите в раздел `Настройки` -> `Программный интерфейс приложения (API)`. Добавьте новое приложение (OAuth Authentication), предоставив необходимую информацию, такую как имя, URL перенаправления (`env BOT_ZAMMAD_OAUTH_REDIRECT_URL`) и т.д.
 
 Замените в файле `docker-compose.yml` `BOT_ZAMMAD_OAUTH_CLIENT_ID` на `AppID`, а `BOT_ZAMMAD_OAUTH_CLIENT_SECRET` на `Secret`.
 
@@ -50,10 +56,7 @@ Zammad VK Bot - это интеграция между платформой об
 
 ### Zammad пользователь для VK Bot
 
-Для корректной работы бота необходимо создать специального пользователя в системе Zammad с правами администратора. Этот пользователь `должен использоваться исключительно ботом` для взаимодействия с системой.
-
-> Создание отдельного пользователя для бота позволит избежать случайного срабатывания триггеров 
-> в системе Zammad из-за действий обычных пользователей.
+Для корректной работы бота необходим специальный пользователь в системе Zammad `с правами администратора`.
 
 Пользователь бота `должен иметь доступ ко всем группам, под которыми создаются тикеты`.
 
@@ -193,38 +196,23 @@ services:
     container_name: vk-bot
     image: chazari/zammad-vk-bot:latest
     environment:
-      BOT_LOG_LEVEL: trace # change
-      BOT_VK_TOKEN: VK_TOKEN # change
+      BOT_LOG_LEVEL: trace # уровень логирования
+      BOT_VK_TOKEN: VK_TOKEN # токен для бота ВК
       BOT_VK_API_HREF: https://api.vk.com
-      BOT_VK_CHAT_HREF: https://vk.com/im?sel=-0000 # change
-      BOT_WEBHOOK_SECRET_KEY: WEBHOOK_SECRET_KEY # change
-      BOT_WEBHOOK_PORT: :8181
-      BOT_ZAMMAD_TOKEN: ZAMMAD_TOKEN # change
-      BOT_ZAMMAD_HREF: https://zammad.ru/ # change
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_HOST: postgres
-      POSTGRES_PASS: POSTGRES_PASS # change
-      BOT_ZAMMAD_OAUTH_CLIENT_ID: ZAMMAD_OAUTH_CLIENT_ID # change
-      BOT_ZAMMAD_OAUTH_CLIENT_SECRET: ZAMMAD_OAUTH_CLIENT_SECRET # change
-      BOT_ZAMMAD_OAUTH_REDIRECT_URL: https://example.ru:8181/zammad/auth # change
-      BOT_ZAMMAD_OAUTH_AUTH_URL: https://zammad.ru/oauth/authorize # change
-      BOT_ZAMMAD_OAUTH_TOKEN_URL: https://zammad.ru/oauth/token # change
-    restart: always
-    ports:
-      - "8181:8181"
-    command: ["/app/main", "vk-bot"]
-  postgres:
-    container_name: postgres
-    image: postgres:latest
-    environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: your_postgres_password
+      BOT_VK_CHAT_HREF: https://vk.com/im?sel=-0000 # ссылка на чат с ботом
+      BOT_WEBHOOK_SECRET_KEY: WEBHOOK_SECRET_KEY # секретный ключ, установленный для webhook'а
+      BOT_WEBHOOK_PORT: :8181 # порт, на котором запускается webhook и OAuth
+      BOT_ZAMMAD_TOKEN: ZAMMAD_TOKEN # токен для системы Zammad
+      BOT_ZAMMAD_HREF: https://zammad.ru/ # адрес Zammad
+      BOT_ZAMMAD_OAUTH_CLIENT_ID: ZAMMAD_OAUTH_CLIENT_ID # AppID приложения (OAuth Authentication)
+      BOT_ZAMMAD_OAUTH_CLIENT_SECRET: ZAMMAD_OAUTH_CLIENT_SECRET # Secret приложения (OAuth Authentication)
+      BOT_ZAMMAD_OAUTH_REDIRECT_URL: https://example.ru:8181/zammad/auth # URL-АДРЕС ОБРАТНОГО ВЫЗОВА (CALLBACK URL) приложения (OAuth Authentication)
+      BOT_ZAMMAD_OAUTH_AUTH_URL: https://zammad.ru/oauth/authorize # URL-адрес OAuth для запроса подтверждения выдачи прав
+      BOT_ZAMMAD_OAUTH_TOKEN_URL: https://zammad.ru/oauth/token # URL-адрес OAuth для получения ключа доступа
     restart: on-failure
     ports:
-      - "5432:5432"
+      - "8181:8181" # порт, на котором запускается webhook и OAuth
+    command: ["/app/main", "vk-bot"]
 ```
 
 После создания файла `docker-compose.yml` и замены параметров на свои, вы можете запустить Zammad VK Bot с помощью команды:

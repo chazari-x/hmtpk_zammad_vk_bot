@@ -31,7 +31,7 @@ func init() {
 			s := storage.NewStorage(cfg.VKBot, cmd.Context())
 
 			log.Trace("Подключение в базе данных...")
-			db, err := database.NewDB(cfg.DB, cmd.Context())
+			db, err := database.NewDB(cmd.Context())
 			if err != nil {
 				log.Fatalf("Ошибка подключения к базе данных: %v\n", err)
 			}
